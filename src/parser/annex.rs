@@ -3,7 +3,7 @@ use roxmltree::{Document, Node};
 use crate::error::Error;
 use crate::model::*;
 use crate::text::extract_text;
-use super::parse_list;
+use super::{child, parse_list};
 
 /// Parses a Formex annex XML string (`<ANNEX>` root) into an [`Annex`].
 ///
@@ -20,10 +20,7 @@ pub fn parse_annex(xml: &str) -> Result<Annex, Error> {
     let doc = Document::parse(xml)?;
     let root = doc.root_element();
 
-    let title_node = root
-        .children()
-        .find(|n| n.is_element() && n.tag_name().name() == "TITLE")
-        .ok_or(Error::MissingElement("TITLE"))?;
+    let title_node = child(root, "TITLE")?;
 
     let number = title_node
         .children()
@@ -123,6 +120,14 @@ mod tests {
 
     fn doc(xml: &str) -> roxmltree::Document<'_> {
         roxmltree::Document::parse(xml).unwrap()
+    }
+
+    // ── parse_annex errors ────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_annex_missing_title() {
+        let result = parse_annex("<ANNEX><CONTENTS/></ANNEX>");
+        assert!(matches!(result, Err(crate::error::Error::MissingElement(_))));
     }
 
     // ── parse_annex ───────────────────────────────────────────────────────────

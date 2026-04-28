@@ -1,3 +1,12 @@
+//! XML parsers for Formex regulation files.
+//!
+//! Public API: [`parse_act`] and [`parse_annex`] each parse one `.fmx.xml` file
+//! into the corresponding model type. Two `pub(crate)` utilities are shared by
+//! both parsers:
+//!
+//! - [`child`] — looks up a mandatory direct child element by tag name.
+//! - [`parse_list`] — converts a `<LIST>` element into [`ContentBlock::ListItem`]s.
+
 /// Parser for the main act XML file (`<ACT>` root).
 mod act;
 /// Parser for annex XML files (`<ANNEX>` root).
@@ -8,8 +17,20 @@ pub use annex::parse_annex;
 
 use roxmltree::Node;
 
+use crate::error::Error;
 use crate::model::ContentBlock;
 use crate::text::extract_text;
+
+/// Returns the first direct child element of `node` with the given tag name.
+///
+/// # Errors
+///
+/// Returns [`Error::MissingElement`] when no matching child is found.
+pub(crate) fn child<'a>(node: Node<'a, 'a>, tag: &'static str) -> Result<Node<'a, 'a>, Error> {
+    node.children()
+        .find(|n| n.is_element() && n.tag_name().name() == tag)
+        .ok_or(Error::MissingElement(tag))
+}
 
 /// Converts a `<LIST>` element into a sequence of [`ContentBlock::ListItem`]s,
 /// one per `<ITEM>` child.

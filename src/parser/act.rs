@@ -3,7 +3,7 @@ use roxmltree::{Document, Node};
 use crate::error::Error;
 use crate::model::*;
 use crate::text::extract_text;
-use super::parse_list;
+use super::{child, parse_list};
 
 /// Parses a Formex main-act XML string (`<ACT>` root) into its three parts.
 ///
@@ -24,13 +24,6 @@ pub fn parse_act(xml: &str) -> Result<(String, Preamble, EnactingTerms), Error> 
     let enacting_terms = parse_enacting_terms(child(root, "ENACTING.TERMS")?)?;
 
     Ok((title, preamble, enacting_terms))
-}
-
-/// Returns the first direct child element of `node` with the given tag name.
-fn child<'a>(node: Node<'a, 'a>, tag: &'static str) -> Result<Node<'a, 'a>, Error> {
-    node.children()
-        .find(|n| n.is_element() && n.tag_name().name() == tag)
-        .ok_or(Error::MissingElement(tag))
 }
 
 /// Joins all `<P>` children of `<TITLE><TI>` into a single space-separated string.
@@ -276,6 +269,30 @@ mod tests {
 
     fn doc(xml: &str) -> roxmltree::Document<'_> {
         roxmltree::Document::parse(xml).unwrap()
+    }
+
+    // ── parse_act errors ──────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_act_missing_title() {
+        let result = parse_act("<ACT><PREAMBLE/><ENACTING.TERMS/></ACT>");
+        assert!(matches!(result, Err(Error::MissingElement(_))));
+    }
+
+    #[test]
+    fn parse_act_missing_preamble() {
+        let result = parse_act(
+            "<ACT><TITLE><TI><P>Title</P></TI></TITLE><ENACTING.TERMS/></ACT>",
+        );
+        assert!(matches!(result, Err(Error::MissingElement(_))));
+    }
+
+    #[test]
+    fn parse_act_missing_enacting_terms() {
+        let result = parse_act(
+            "<ACT><TITLE><TI><P>Title</P></TI></TITLE><PREAMBLE/></ACT>",
+        );
+        assert!(matches!(result, Err(Error::MissingElement(_))));
     }
 
     // ── title ─────────────────────────────────────────────────────────────────
