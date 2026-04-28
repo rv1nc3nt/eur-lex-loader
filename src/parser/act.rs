@@ -4,6 +4,16 @@ use crate::error::Error;
 use crate::model::*;
 use crate::text::extract_text;
 
+/// Parses a Formex main-act XML string (`<ACT>` root) into its three parts.
+///
+/// Returns `(title, preamble, enacting_terms)`.  The caller is responsible for
+/// combining these with parsed annexes to build a [`crate::model::Regulation`].
+///
+/// # Errors
+///
+/// Returns [`crate::error::Error::Xml`] for malformed XML and
+/// [`crate::error::Error::MissingElement`] if `<TITLE>`, `<PREAMBLE>`, or
+/// `<ENACTING.TERMS>` are absent from the document root.
 pub fn parse_act(xml: &str) -> Result<(String, Preamble, EnactingTerms), Error> {
     let doc = Document::parse(xml)?;
     let root = doc.root_element();
@@ -15,12 +25,14 @@ pub fn parse_act(xml: &str) -> Result<(String, Preamble, EnactingTerms), Error> 
     Ok((title, preamble, enacting_terms))
 }
 
+/// Returns the first direct child element of `node` with the given tag name.
 fn child<'a>(node: Node<'a, 'a>, tag: &'static str) -> Result<Node<'a, 'a>, Error> {
     node.children()
         .find(|n| n.is_element() && n.tag_name().name() == tag)
         .ok_or(Error::MissingElement(tag))
 }
 
+/// Joins all `<P>` children of `<TITLE><TI>` into a single space-separated string.
 fn parse_title(node: Node) -> Result<String, Error> {
     let ti = child(node, "TI")?;
     let parts: Vec<String> = ti
@@ -31,6 +43,7 @@ fn parse_title(node: Node) -> Result<String, Error> {
     Ok(parts.join(" "))
 }
 
+/// Extracts all four structural parts of a `<PREAMBLE>` element.
 fn parse_preamble(node: Node) -> Result<Preamble, Error> {
     let init = node
         .children()
@@ -69,6 +82,11 @@ fn parse_preamble(node: Node) -> Result<Preamble, Error> {
     Ok(Preamble { init, visas, recitals, enacting_formula })
 }
 
+/// Extracts the number and text from a single `<CONSID>` recital element.
+///
+/// Standard recitals use an `<NP>` wrapper with `<NO.P>` and `<TXT>` children.
+/// If no `<NP>` is found the entire element is rendered as plain text with an
+/// empty number.
 fn parse_recital(node: Node) -> Recital {
     let np = node
         .children()
@@ -93,6 +111,7 @@ fn parse_recital(node: Node) -> Recital {
     Recital { number, text }
 }
 
+/// Collects all top-level `<DIVISION>` elements as chapters.
 fn parse_enacting_terms(node: Node) -> Result<EnactingTerms, Error> {
     let chapters = node
         .children()
@@ -102,6 +121,10 @@ fn parse_enacting_terms(node: Node) -> Result<EnactingTerms, Error> {
     Ok(EnactingTerms { chapters })
 }
 
+/// Parses a top-level `<DIVISION>` as a chapter.
+///
+/// If the division contains child `<DIVISION>` elements those are parsed as
+/// sections; otherwise its `<ARTICLE>` children are parsed directly.
 fn parse_chapter(node: Node) -> Result<Chapter, Error> {
     let title_node = child(node, "TITLE")?;
     let title = extract_text(child(title_node, "TI")?);
@@ -133,6 +156,7 @@ fn parse_chapter(node: Node) -> Result<Chapter, Error> {
     Ok(Chapter { title, subtitle, contents })
 }
 
+/// Parses a nested `<DIVISION>` as a section (articles only, no further nesting).
 fn parse_section(node: Node) -> Result<Section, Error> {
     let title_node = child(node, "TITLE")?;
     let title = extract_text(child(title_node, "TI")?);
@@ -150,6 +174,12 @@ fn parse_section(node: Node) -> Result<Section, Error> {
     Ok(Section { title, subtitle, articles })
 }
 
+/// Parses an `<ARTICLE>` element.
+///
+/// When `<PARAG>` wrappers are present each is parsed individually.  Some
+/// articles (e.g. Article 113 of the EU AI Act) contain bare `<ALINEA>`
+/// elements with no `<PARAG>` wrapper; those are collected into a single
+/// [`Paragraph`] with `number: None`.
 fn parse_article(node: Node) -> Result<Article, Error> {
     let number = node
         .children()
@@ -173,6 +203,7 @@ fn parse_article(node: Node) -> Result<Article, Error> {
             .map(parse_paragraph)
             .collect::<Result<Vec<_>, _>>()?
     } else {
+        // Articles without <PARAG> wrappers use bare <ALINEA> children.
         let alineas: Vec<String> = node
             .children()
             .filter(|n| n.is_element() && n.tag_name().name() == "ALINEA")
@@ -184,6 +215,7 @@ fn parse_article(node: Node) -> Result<Article, Error> {
     Ok(Article { number, title, paragraphs })
 }
 
+/// Parses a `<PARAG>` element into a [`Paragraph`] with a number and alineas.
 fn parse_paragraph(node: Node) -> Result<Paragraph, Error> {
     let number = node
         .children()
@@ -197,4 +229,142 @@ fn parse_paragraph(node: Node) -> Result<Paragraph, Error> {
         .collect();
 
     Ok(Paragraph { number, alineas })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn doc(xml: &str) -> roxmltree::Document<'_> {
+        roxmltree::Document::parse(xml).unwrap()
+    }
+
+    // ── title ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn title_joins_p_elements() {
+        let xml = "<TITLE><TI><P>Regulation</P><P>of 1 January</P></TI></TITLE>";
+        let d = doc(xml);
+        let result = parse_title(d.root_element()).unwrap();
+        assert_eq!(result, "Regulation of 1 January");
+    }
+
+    // ── preamble ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn preamble_counts_visas_and_recitals() {
+        let xml = r#"<PREAMBLE>
+            <PREAMBLE.INIT><P>THE COUNCIL,</P></PREAMBLE.INIT>
+            <GR.VISA>
+                <VISA><P>Visa one</P></VISA>
+                <VISA><P>Visa two</P></VISA>
+            </GR.VISA>
+            <GR.CONSID>
+                <CONSID><NP><NO.P>(1)</NO.P><TXT>First recital.</TXT></NP></CONSID>
+                <CONSID><NP><NO.P>(2)</NO.P><TXT>Second recital.</TXT></NP></CONSID>
+                <CONSID><NP><NO.P>(3)</NO.P><TXT>Third recital.</TXT></NP></CONSID>
+            </GR.CONSID>
+            <PREAMBLE.FINAL><P>HAVE ADOPTED:</P></PREAMBLE.FINAL>
+        </PREAMBLE>"#;
+        let d = doc(xml);
+        let p = parse_preamble(d.root_element()).unwrap();
+        assert_eq!(p.visas.len(), 2);
+        assert_eq!(p.recitals.len(), 3);
+        assert_eq!(p.init, "THE COUNCIL,");
+        assert_eq!(p.enacting_formula, "HAVE ADOPTED:");
+    }
+
+    #[test]
+    fn recital_number_and_text() {
+        let xml = "<CONSID><NP><NO.P>(42)</NO.P><TXT>Some text.</TXT></NP></CONSID>";
+        let d = doc(xml);
+        let r = parse_recital(d.root_element());
+        assert_eq!(r.number, "(42)");
+        assert_eq!(r.text, "Some text.");
+    }
+
+    #[test]
+    fn recital_without_np_falls_back_to_full_text() {
+        let xml = "<CONSID><P>Unnumbered recital.</P></CONSID>";
+        let d = doc(xml);
+        let r = parse_recital(d.root_element());
+        assert_eq!(r.number, "");
+        assert_eq!(r.text, "Unnumbered recital.");
+    }
+
+    // ── chapters and sections ─────────────────────────────────────────────────
+
+    #[test]
+    fn chapter_with_direct_articles() {
+        let xml = r#"<DIVISION>
+            <TITLE><TI><P>CHAPTER I</P></TI></TITLE>
+            <ARTICLE><TI.ART>Article 1</TI.ART><ALINEA>Text.</ALINEA></ARTICLE>
+            <ARTICLE><TI.ART>Article 2</TI.ART><ALINEA>Text.</ALINEA></ARTICLE>
+        </DIVISION>"#;
+        let d = doc(xml);
+        let ch = parse_chapter(d.root_element()).unwrap();
+        assert_eq!(ch.title, "CHAPTER I");
+        match ch.contents {
+            ChapterContents::Articles(arts) => assert_eq!(arts.len(), 2),
+            ChapterContents::Sections(_) => panic!("expected Articles"),
+        }
+    }
+
+    #[test]
+    fn chapter_with_sections() {
+        let xml = r#"<DIVISION>
+            <TITLE><TI><P>CHAPTER III</P></TI></TITLE>
+            <DIVISION>
+                <TITLE><TI><P>SECTION 1</P></TI></TITLE>
+                <ARTICLE><TI.ART>Article 5</TI.ART><ALINEA>Text.</ALINEA></ARTICLE>
+            </DIVISION>
+            <DIVISION>
+                <TITLE><TI><P>SECTION 2</P></TI></TITLE>
+                <ARTICLE><TI.ART>Article 6</TI.ART><ALINEA>Text.</ALINEA></ARTICLE>
+            </DIVISION>
+        </DIVISION>"#;
+        let d = doc(xml);
+        let ch = parse_chapter(d.root_element()).unwrap();
+        match ch.contents {
+            ChapterContents::Sections(secs) => {
+                assert_eq!(secs.len(), 2);
+                assert_eq!(secs[0].title, "SECTION 1");
+                assert_eq!(secs[1].articles.len(), 1);
+            }
+            ChapterContents::Articles(_) => panic!("expected Sections"),
+        }
+    }
+
+    // ── articles ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn article_with_paragraphs() {
+        let xml = r#"<ARTICLE>
+            <TI.ART>Article 6</TI.ART>
+            <STI.ART><P>Classification rules</P></STI.ART>
+            <PARAG><NO.PARAG>1.</NO.PARAG><ALINEA>First paragraph.</ALINEA></PARAG>
+            <PARAG><NO.PARAG>2.</NO.PARAG><ALINEA>Second paragraph.</ALINEA></PARAG>
+        </ARTICLE>"#;
+        let d = doc(xml);
+        let art = parse_article(d.root_element()).unwrap();
+        assert_eq!(art.number, "Article 6");
+        assert_eq!(art.title.as_deref(), Some("Classification rules"));
+        assert_eq!(art.paragraphs.len(), 2);
+        assert_eq!(art.paragraphs[0].number.as_deref(), Some("1."));
+        assert_eq!(art.paragraphs[1].alineas[0], "Second paragraph.");
+    }
+
+    #[test]
+    fn article_bare_alineas_become_single_paragraph() {
+        // Some articles have no <PARAG> wrapper — alineas sit directly under <ARTICLE>.
+        let xml = r#"<ARTICLE>
+            <TI.ART>Article 113</TI.ART>
+            <ALINEA>Only text.</ALINEA>
+        </ARTICLE>"#;
+        let d = doc(xml);
+        let art = parse_article(d.root_element()).unwrap();
+        assert_eq!(art.paragraphs.len(), 1);
+        assert!(art.paragraphs[0].number.is_none());
+        assert_eq!(art.paragraphs[0].alineas[0], "Only text.");
+    }
 }

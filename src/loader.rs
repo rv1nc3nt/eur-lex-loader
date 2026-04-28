@@ -7,6 +7,18 @@ use crate::error::Error;
 use crate::model::Regulation;
 use crate::parser::{parse_act, parse_annex};
 
+/// Loads a complete regulation from a directory of Formex `.fmx.xml` files.
+///
+/// The directory must contain exactly one `*.doc.fmx.xml` registry file.
+/// That registry is parsed first to discover the canonical filename of the
+/// main act and the ordered list of annex filenames; all files are then read
+/// from the same directory.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] if the directory cannot be read or a file is missing,
+/// [`Error::Xml`] if any file contains malformed XML, and
+/// [`Error::MissingElement`] if a required Formex element is absent.
 pub fn load_regulation(data_dir: &Path) -> Result<Regulation, Error> {
     let doc_file = find_doc_file(data_dir)?;
     let (main_file, annex_files) = discover_files(&doc_file)?;
@@ -25,6 +37,7 @@ pub fn load_regulation(data_dir: &Path) -> Result<Regulation, Error> {
     Ok(Regulation { title, preamble, enacting_terms, annexes })
 }
 
+/// Scans `data_dir` for the `*.doc.fmx.xml` registry file.
 fn find_doc_file(data_dir: &Path) -> Result<std::path::PathBuf, Error> {
     let entries = fs::read_dir(data_dir).map_err(|e| Error::Io {
         path: data_dir.display().to_string(),
@@ -42,6 +55,11 @@ fn find_doc_file(data_dir: &Path) -> Result<std::path::PathBuf, Error> {
     Err(Error::MissingElement("*.doc.fmx.xml"))
 }
 
+/// Parses a `.doc.fmx.xml` registry to obtain the ordered list of files.
+///
+/// Returns `(main_act_filename, vec_of_annex_filenames)`. The annex list
+/// preserves the `NO.SEQ` order declared in the registry rather than relying
+/// on filesystem sort order.
 fn discover_files(doc_file: &Path) -> Result<(String, Vec<String>), Error> {
     let xml = read_file(doc_file)?;
     let document = Document::parse(&xml)?;
@@ -77,6 +95,7 @@ fn discover_files(doc_file: &Path) -> Result<(String, Vec<String>), Error> {
     Ok((main_file, annex_files))
 }
 
+/// Reads a file to a `String`, wrapping any I/O error with the file path.
 fn read_file(path: &Path) -> Result<String, Error> {
     fs::read_to_string(path).map_err(|e| Error::Io {
         path: path.display().to_string(),

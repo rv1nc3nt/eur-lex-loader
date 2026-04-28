@@ -1,62 +1,128 @@
+/// A complete EU regulation assembled from a Formex publication directory.
+///
+/// Combines the main act file (`*.000101.fmx.xml`) with all annex files
+/// (`*.012401.fmx.xml`, etc.) discovered via the `.doc.fmx.xml` registry.
 pub struct Regulation {
+    /// The full title of the regulation, e.g. `"Regulation (EU) 2024/1689 …"`.
     pub title: String,
+    /// The preamble preceding the operative articles.
     pub preamble: Preamble,
+    /// The operative body of the regulation: chapters, sections, and articles.
     pub enacting_terms: EnactingTerms,
+    /// The annexes, in the order declared by the `.doc.fmx.xml` registry.
     pub annexes: Vec<Annex>,
 }
 
+/// The preamble of a regulation (`<PREAMBLE>`).
+///
+/// Formex splits the preamble into four structural parts: the opening
+/// institutional formula (`PREAMBLE.INIT`), the legal bases (`GR.VISA`),
+/// the recitals (`GR.CONSID`), and the closing enacting formula
+/// (`PREAMBLE.FINAL`).
 pub struct Preamble {
+    /// Opening formula (`<PREAMBLE.INIT>`), e.g. `"THE EUROPEAN PARLIAMENT AND THE COUNCIL …"`.
     pub init: String,
+    /// Legal basis citations (`<VISA>` elements inside `<GR.VISA>`),
+    /// each rendered as plain text.
     pub visas: Vec<String>,
+    /// Numbered recitals (`<CONSID>` elements inside `<GR.CONSID>`).
     pub recitals: Vec<Recital>,
+    /// Closing enacting formula (`<PREAMBLE.FINAL>`), e.g. `"HAVE ADOPTED THIS REGULATION:"`.
     pub enacting_formula: String,
 }
 
+/// A single numbered recital (`<CONSID>`).
+///
+/// In Formex the content is wrapped in a numbered paragraph (`<NP>`):
+/// `<NO.P>` holds the label and `<TXT>` holds the body.
 pub struct Recital {
+    /// The recital label, e.g. `"(1)"`.
     pub number: String,
+    /// The plain-text body of the recital.
     pub text: String,
 }
 
+/// The operative body of the regulation (`<ENACTING.TERMS>`).
 pub struct EnactingTerms {
+    /// Top-level chapters, mapped from `<DIVISION>` elements directly inside
+    /// `<ENACTING.TERMS>`.
     pub chapters: Vec<Chapter>,
 }
 
+/// A chapter of the regulation (`<DIVISION>` at the top level of `<ENACTING.TERMS>`).
+///
+/// Chapters either contain sections (themselves containing articles) or
+/// articles directly — never both.
 pub struct Chapter {
+    /// Chapter heading, e.g. `"CHAPTER I"` (from `<TITLE><TI>`).
     pub title: String,
+    /// Optional chapter subtitle, e.g. `"General provisions"` (from `<TITLE><STI>`).
     pub subtitle: Option<String>,
+    /// Either a list of sections or a flat list of articles.
     pub contents: ChapterContents,
 }
 
+/// Discriminates whether a chapter is sub-divided into sections.
 pub enum ChapterContents {
+    /// The chapter groups its articles under named sections.
     Sections(Vec<Section>),
+    /// The chapter contains articles directly, with no section level.
     Articles(Vec<Article>),
 }
 
+/// A section within a chapter (`<DIVISION>` nested inside a top-level `<DIVISION>`).
 pub struct Section {
+    /// Section heading, e.g. `"SECTION 1"` (from `<TITLE><TI>`).
     pub title: String,
+    /// Optional section subtitle (from `<TITLE><STI>`).
     pub subtitle: Option<String>,
+    /// Articles contained in this section.
     pub articles: Vec<Article>,
 }
 
+/// A single article (`<ARTICLE>`).
 pub struct Article {
+    /// Article number as printed, e.g. `"Article 6"` (from `<TI.ART>`).
     pub number: String,
+    /// Optional article title, e.g. `"Classification rules for high-risk AI systems"`
+    /// (from `<STI.ART>`).
     pub title: Option<String>,
+    /// The numbered paragraphs of the article.
     pub paragraphs: Vec<Paragraph>,
 }
 
+/// A numbered paragraph within an article (`<PARAG>`).
+///
+/// Each paragraph consists of an optional number label followed by one or
+/// more alineas (text blocks). When an article has no `<PARAG>` wrappers its
+/// `<ALINEA>` children are grouped into a single paragraph with `number: None`.
 pub struct Paragraph {
+    /// Paragraph number, e.g. `"1."` (from `<NO.PARAG>`). `None` for articles
+    /// that use bare `<ALINEA>` elements without a `<PARAG>` wrapper.
     pub number: Option<String>,
+    /// Plain-text content of each `<ALINEA>` in this paragraph.
     pub alineas: Vec<String>,
 }
 
+/// A parsed annex file (`<ANNEX>`).
 pub struct Annex {
+    /// Annex identifier, e.g. `"ANNEX I"` (from `<TITLE><TI>`).
     pub number: String,
+    /// Optional descriptive subtitle (from `<TITLE><STI>`).
     pub subtitle: Option<String>,
+    /// Top-level content blocks from `<CONTENTS>`.
     pub content_blocks: Vec<ContentBlock>,
 }
 
+/// A content element inside an annex `<CONTENTS>` block.
+///
+/// Annexes are heterogeneous: some use plain paragraphs, others use numbered
+/// lists, and some group content under `<GR.SEQ>` section headings.
 pub enum ContentBlock {
+    /// A plain paragraph (`<P>`).
     Paragraph(String),
+    /// A numbered list entry (`<ITEM>` inside `<LIST>`, or `<NP>`).
     ListItem { number: String, text: String },
+    /// A grouped section with its own title (`<GR.SEQ>`).
     Section { title: String, blocks: Vec<ContentBlock> },
 }

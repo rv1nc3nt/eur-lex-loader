@@ -1,14 +1,9 @@
-mod error;
-mod loader;
-mod model;
-mod parser;
-mod text;
+use euro_lex_loader::loader::load_regulation;
+use euro_lex_loader::model::ChapterContents;
 
-use model::ChapterContents;
-
-fn main() -> Result<(), error::Error> {
+fn main() -> Result<(), euro_lex_loader::error::Error> {
     let data_dir = std::path::Path::new("data/EU_AI_ACT");
-    let reg = loader::load_regulation(data_dir)?;
+    let reg = load_regulation(data_dir)?;
 
     println!("=== TITLE ===");
     println!("{}", reg.title);
