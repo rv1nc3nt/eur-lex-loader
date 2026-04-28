@@ -1,14 +1,45 @@
+use std::path::PathBuf;
+
+use clap::Parser;
 use euro_lex_loader::loader::load_regulation;
 
-/// Loads a Formex regulation directory and prints the result as pretty-printed JSON.
+/// Load a Formex regulation directory and output it as JSON.
 ///
-/// Usage: `euro-lex-loader [DATA_DIR]`
-///
-/// `DATA_DIR` defaults to `data/EU_AI_ACT` when omitted.
+/// The directory must contain a `*.doc.fmx.xml` registry file that lists the
+/// main act and all annex files. See the EU AI Act example in `data/EU_AI_ACT`.
+#[derive(Parser)]
+#[command(version, about)]
+struct Cli {
+    /// Path to the Formex regulation directory.
+    #[arg(default_value = "data/EU_AI_ACT")]
+    dir: PathBuf,
+
+    /// Write JSON output to FILE instead of stdout.
+    #[arg(short, long, value_name = "FILE")]
+    output: Option<PathBuf>,
+
+    /// Output compact JSON (default: pretty-printed).
+    #[arg(short, long)]
+    compact: bool,
+}
+
 fn main() -> Result<(), euro_lex_loader::error::Error> {
-    let arg = std::env::args().nth(1);
-    let data_dir = std::path::Path::new(arg.as_deref().unwrap_or("data/EU_AI_ACT"));
-    let reg = load_regulation(data_dir)?;
-    println!("{}", serde_json::to_string_pretty(&reg).expect("serialization failed"));
+    let cli = Cli::parse();
+    let reg = load_regulation(&cli.dir)?;
+
+    let json = if cli.compact {
+        serde_json::to_string(&reg)
+    } else {
+        serde_json::to_string_pretty(&reg)
+    }
+    .expect("serialization failed");
+
+    match cli.output {
+        Some(ref path) => std::fs::write(path, json).map_err(|e| {
+            euro_lex_loader::error::Error::Io { path: path.display().to_string(), source: e }
+        })?,
+        None => println!("{json}"),
+    }
+
     Ok(())
 }
