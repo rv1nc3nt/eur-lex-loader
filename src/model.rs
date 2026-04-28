@@ -1,7 +1,10 @@
+use serde::Serialize;
+
 /// A complete EU regulation assembled from a Formex publication directory.
 ///
 /// Combines the main act file (`*.000101.fmx.xml`) with all annex files
 /// (`*.012401.fmx.xml`, etc.) discovered via the `.doc.fmx.xml` registry.
+#[derive(Serialize)]
 pub struct Regulation {
     /// The full title of the regulation, e.g. `"Regulation (EU) 2024/1689 …"`.
     pub title: String,
@@ -19,6 +22,7 @@ pub struct Regulation {
 /// institutional formula (`PREAMBLE.INIT`), the legal bases (`GR.VISA`),
 /// the recitals (`GR.CONSID`), and the closing enacting formula
 /// (`PREAMBLE.FINAL`).
+#[derive(Serialize)]
 pub struct Preamble {
     /// Opening formula (`<PREAMBLE.INIT>`), e.g. `"THE EUROPEAN PARLIAMENT AND THE COUNCIL …"`.
     pub init: String,
@@ -35,6 +39,7 @@ pub struct Preamble {
 ///
 /// In Formex the content is wrapped in a numbered paragraph (`<NP>`):
 /// `<NO.P>` holds the label and `<TXT>` holds the body.
+#[derive(Serialize)]
 pub struct Recital {
     /// The recital label, e.g. `"(1)"`.
     pub number: String,
@@ -43,6 +48,7 @@ pub struct Recital {
 }
 
 /// The operative body of the regulation (`<ENACTING.TERMS>`).
+#[derive(Serialize)]
 pub struct EnactingTerms {
     /// Top-level chapters, mapped from `<DIVISION>` elements directly inside
     /// `<ENACTING.TERMS>`.
@@ -53,6 +59,7 @@ pub struct EnactingTerms {
 ///
 /// Chapters either contain sections (themselves containing articles) or
 /// articles directly — never both.
+#[derive(Serialize)]
 pub struct Chapter {
     /// Chapter heading, e.g. `"CHAPTER I"` (from `<TITLE><TI>`).
     pub title: String,
@@ -63,6 +70,7 @@ pub struct Chapter {
 }
 
 /// Discriminates whether a chapter is sub-divided into sections.
+#[derive(Serialize)]
 pub enum ChapterContents {
     /// The chapter groups its articles under named sections.
     Sections(Vec<Section>),
@@ -71,6 +79,7 @@ pub enum ChapterContents {
 }
 
 /// A section within a chapter (`<DIVISION>` nested inside a top-level `<DIVISION>`).
+#[derive(Serialize)]
 pub struct Section {
     /// Section heading, e.g. `"SECTION 1"` (from `<TITLE><TI>`).
     pub title: String,
@@ -81,6 +90,7 @@ pub struct Section {
 }
 
 /// A single article (`<ARTICLE>`).
+#[derive(Serialize)]
 pub struct Article {
     /// Article number as printed, e.g. `"Article 6"` (from `<TI.ART>`).
     pub number: String,
@@ -96,6 +106,7 @@ pub struct Article {
 /// Each paragraph consists of an optional number label followed by one or
 /// more alineas (text blocks). When an article has no `<PARAG>` wrappers its
 /// `<ALINEA>` children are grouped into a single paragraph with `number: None`.
+#[derive(Serialize)]
 pub struct Paragraph {
     /// Paragraph number, e.g. `"1."` (from `<NO.PARAG>`). `None` for articles
     /// that use bare `<ALINEA>` elements without a `<PARAG>` wrapper.
@@ -105,6 +116,7 @@ pub struct Paragraph {
 }
 
 /// A parsed annex file (`<ANNEX>`).
+#[derive(Serialize)]
 pub struct Annex {
     /// Annex identifier, e.g. `"ANNEX I"` (from `<TITLE><TI>`).
     pub number: String,
@@ -118,6 +130,7 @@ pub struct Annex {
 ///
 /// Annexes are heterogeneous: some use plain paragraphs, others use numbered
 /// lists, and some group content under `<GR.SEQ>` section headings.
+#[derive(Serialize)]
 pub enum ContentBlock {
     /// A plain paragraph (`<P>`).
     Paragraph(String),
