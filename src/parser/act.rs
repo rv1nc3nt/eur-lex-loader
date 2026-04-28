@@ -207,7 +207,7 @@ fn parse_article(node: Node) -> Result<Article, Error> {
         let alineas: Vec<String> = node
             .children()
             .filter(|n| n.is_element() && n.tag_name().name() == "ALINEA")
-            .map(extract_text)
+            .flat_map(expand_alinea)
             .collect();
         vec![Paragraph { number: None, alineas }]
     };
@@ -225,10 +225,54 @@ fn parse_paragraph(node: Node) -> Result<Paragraph, Error> {
     let alineas: Vec<String> = node
         .children()
         .filter(|n| n.is_element() && n.tag_name().name() == "ALINEA")
-        .map(extract_text)
+        .flat_map(expand_alinea)
         .collect();
 
     Ok(Paragraph { number, alineas })
+}
+
+/// Expands a single `<ALINEA>` element into one or more plain-text strings.
+///
+/// When an alinea contains a `<LIST>`, each `<ITEM>` becomes its own string
+/// rather than being collapsed into a single blob. Any `<P>` children before
+/// or after the list are emitted as individual strings first.
+///
+/// Falls back to [`extract_text`] on the whole node when the alinea has no
+/// recognised block children (e.g. it contains only inline text or `<HT>` tags).
+fn expand_alinea(node: Node) -> Vec<String> {
+    let mut result = Vec::new();
+    for child in node.children().filter(|n| n.is_element()) {
+        match child.tag_name().name() {
+            "P" => {
+                let t = extract_text(child);
+                if !t.is_empty() {
+                    result.push(t);
+                }
+            }
+            "LIST" => {
+                for item in child
+                    .children()
+                    .filter(|n| n.is_element() && n.tag_name().name() == "ITEM")
+                {
+                    result.push(extract_text(item));
+                }
+            }
+            _ => {
+                let t = extract_text(child);
+                if !t.is_empty() {
+                    result.push(t);
+                }
+            }
+        }
+    }
+    // Pure inline alinea with no block children — treat the whole thing as one string.
+    if result.is_empty() {
+        let t = extract_text(node);
+        if !t.is_empty() {
+            result.push(t);
+        }
+    }
+    result
 }
 
 #[cfg(test)]
@@ -366,5 +410,32 @@ mod tests {
         assert_eq!(art.paragraphs.len(), 1);
         assert!(art.paragraphs[0].number.is_none());
         assert_eq!(art.paragraphs[0].alineas[0], "Only text.");
+    }
+
+    #[test]
+    fn alinea_list_expands_to_individual_alineas() {
+        // An <ALINEA> that contains a <P> intro and a <LIST> should yield one
+        // alinea for the intro and one per <ITEM>, not a single flattened string.
+        // This matches Article 3 of the EU AI Act (definitions).
+        let xml = r#"<ARTICLE>
+            <TI.ART>Article 3</TI.ART>
+            <STI.ART><P>Definitions</P></STI.ART>
+            <ALINEA>
+                <P>For the purposes of this Regulation:</P>
+                <LIST TYPE="ARAB">
+                    <ITEM><NP><NO.P>(1)</NO.P><TXT>first definition</TXT></NP></ITEM>
+                    <ITEM><NP><NO.P>(2)</NO.P><TXT>second definition</TXT></NP></ITEM>
+                </LIST>
+            </ALINEA>
+        </ARTICLE>"#;
+        let d = doc(xml);
+        let art = parse_article(d.root_element()).unwrap();
+        assert_eq!(art.paragraphs.len(), 1);
+        let alineas = &art.paragraphs[0].alineas;
+        // intro + 2 list items = 3 alineas
+        assert_eq!(alineas.len(), 3);
+        assert_eq!(alineas[0], "For the purposes of this Regulation:");
+        assert!(alineas[1].contains("(1)") && alineas[1].contains("first definition"));
+        assert!(alineas[2].contains("(2)") && alineas[2].contains("second definition"));
     }
 }

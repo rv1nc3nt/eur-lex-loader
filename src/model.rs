@@ -135,7 +135,13 @@ pub enum ContentBlock {
     /// A plain paragraph (`<P>`).
     Paragraph(String),
     /// A numbered list entry (`<ITEM>` inside `<LIST>`, or `<NP>`).
-    ListItem { number: String, text: String },
+    /// `sub_items` holds any nested `<LIST>` entries; omitted from JSON when empty.
+    ListItem {
+        number: String,
+        text: String,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        sub_items: Vec<ContentBlock>,
+    },
     /// A grouped section with its own title (`<GR.SEQ>`).
     Section { title: String, blocks: Vec<ContentBlock> },
 }

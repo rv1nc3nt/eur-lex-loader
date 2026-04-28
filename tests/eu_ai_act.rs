@@ -36,6 +36,46 @@ fn eu_ai_act_structure() {
     }).sum();
     assert_eq!(total_articles, 113, "unexpected total article count");
 
+    // Article 3 (definitions): 1 intro alinea + 68 definition items = 69 alineas.
+    let ch1_arts = match &reg.enacting_terms.chapters[0].contents {
+        ChapterContents::Articles(arts) => arts,
+        _ => panic!("Chapter I should have direct articles"),
+    };
+    let art3 = &ch1_arts[2];
+    assert_eq!(art3.number, "Article 3", "unexpected article at index 2 of Chapter I");
+    assert_eq!(art3.paragraphs.len(), 1);
+    assert_eq!(
+        art3.paragraphs[0].alineas.len(), 69,
+        "Article 3 should have 1 intro + 68 definition alineas"
+    );
+
+    // Annex III (index 2): list wrapped in a <P> must expand to 8 ListItems.
+    let annex_iii = &reg.annexes[2];
+    assert!(annex_iii.number.contains("III"), "expected ANNEX III at index 2");
+    let iii_items: Vec<_> = annex_iii.content_blocks.iter()
+        .filter(|b| matches!(b, euro_lex_loader::model::ContentBlock::ListItem { .. }))
+        .collect();
+    assert_eq!(iii_items.len(), 8, "Annex III should have 8 high-risk category items");
+    // Item 1 (Biometrics) has 3 alpha sub-items; item 2 (Critical infrastructure) has none.
+    match &annex_iii.content_blocks[1] {
+        euro_lex_loader::model::ContentBlock::ListItem { sub_items, .. } =>
+            assert_eq!(sub_items.len(), 3, "Annex III item 1 should have 3 sub-items"),
+        _ => panic!("expected ListItem at index 1 of Annex III"),
+    }
+    match &annex_iii.content_blocks[2] {
+        euro_lex_loader::model::ContentBlock::ListItem { sub_items, .. } =>
+            assert!(sub_items.is_empty(), "Annex III item 2 should have no sub-items"),
+        _ => panic!("expected ListItem at index 2 of Annex III"),
+    }
+
+    // Annex IV (index 3): list items use <NP> wrappers and must not have empty text.
+    let annex_iv = &reg.annexes[3];
+    assert!(annex_iv.number.contains("IV"), "expected ANNEX IV at index 3");
+    let empty_items: Vec<_> = annex_iv.content_blocks.iter().filter(|b| {
+        matches!(b, euro_lex_loader::model::ContentBlock::ListItem { text, .. } if text.is_empty())
+    }).collect();
+    assert!(empty_items.is_empty(), "Annex IV has {} ListItem(s) with empty text", empty_items.len());
+
     // Annexes: 13 files, all identified as ANNEX something.
     assert_eq!(reg.annexes.len(), 13, "unexpected annex count");
     for annex in &reg.annexes {
