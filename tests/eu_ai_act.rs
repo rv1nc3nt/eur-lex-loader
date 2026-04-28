@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use euro_lex_loader::loader::load_regulation;
-use euro_lex_loader::model::ChapterContents;
+use euro_lex_loader::model::{ChapterContents, ContentBlock};
 
 #[test]
 fn eu_ai_act_structure() {
@@ -48,6 +48,48 @@ fn eu_ai_act_structure() {
         art3.paragraphs[0].alineas.len(), 69,
         "Article 3 should have 1 intro + 68 definition alineas"
     );
+    assert!(matches!(&art3.paragraphs[0].alineas[0], ContentBlock::Paragraph(_)),
+        "Article 3 first alinea should be a Paragraph (intro text)");
+    assert!(matches!(&art3.paragraphs[0].alineas[1], ContentBlock::ListItem { number, .. } if number == "(1)"),
+        "Article 3 second alinea should be ListItem (1)");
+
+    // Article 5, paragraph 1: alineas must contain ContentBlock::ListItem entries.
+    // Para 1 has: intro P + 8 list items (items (c) and (h) have sub-lists) = 9 blocks,
+    // plus one trailing plain alinea = 10 total.
+    let ch2_arts = match &reg.enacting_terms.chapters[1].contents {
+        ChapterContents::Articles(arts) => arts,
+        _ => panic!("Chapter II should have direct articles"),
+    };
+    let ch1_art5 = &ch2_arts[0];
+    assert_eq!(ch1_art5.number, "Article 5", "unexpected article at index 0 of Chapter II");
+    let para1 = &ch1_art5.paragraphs[0];
+    assert_eq!(para1.number.as_deref(), Some("1."));
+    // 8 list items + 1 intro paragraph + 1 trailing plain alinea = 10
+    assert_eq!(para1.alineas.len(), 10, "Article 5 para 1 should have 10 alinea blocks");
+    // First block is the intro paragraph.
+    assert!(matches!(&para1.alineas[0], ContentBlock::Paragraph(_)),
+        "Article 5 para 1 alineas[0] should be a Paragraph");
+    // Items (a) through (h) are ListItems.
+    assert!(matches!(&para1.alineas[1], ContentBlock::ListItem { number, .. } if number == "(a)"));
+    // Item (c) has 2 sub-items.
+    match &para1.alineas[3] {
+        ContentBlock::ListItem { number, sub_items, .. } => {
+            assert_eq!(number, "(c)");
+            assert_eq!(sub_items.len(), 2, "Article 5 item (c) should have 2 sub-items");
+        }
+        _ => panic!("Article 5 para 1 alineas[3] should be a ListItem"),
+    }
+    // Item (h) has 3 sub-items.
+    match &para1.alineas[8] {
+        ContentBlock::ListItem { number, sub_items, .. } => {
+            assert_eq!(number, "(h)");
+            assert_eq!(sub_items.len(), 3, "Article 5 item (h) should have 3 sub-items");
+        }
+        _ => panic!("Article 5 para 1 alineas[8] should be a ListItem"),
+    }
+    // Last block is the trailing plain alinea.
+    assert!(matches!(&para1.alineas[9], ContentBlock::Paragraph(_)),
+        "Article 5 para 1 alineas[9] should be a Paragraph");
 
     // Annex III (index 2): list wrapped in a <P> must expand to 8 ListItems.
     let annex_iii = &reg.annexes[2];

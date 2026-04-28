@@ -3,6 +3,7 @@ use roxmltree::{Document, Node};
 use crate::error::Error;
 use crate::model::*;
 use crate::text::extract_text;
+use super::parse_list;
 
 /// Parses a Formex annex XML string (`<ANNEX>` root) into an [`Annex`].
 ///
@@ -98,61 +99,6 @@ fn parse_contents(node: Node) -> Vec<ContentBlock> {
         }
     }
     blocks
-}
-
-/// Converts a `<LIST>` element into a sequence of [`ContentBlock::ListItem`]s,
-/// one per `<ITEM>` child.
-///
-/// Two item structures are found in Formex annexes:
-/// - Simple: `<ITEM><NO.P>—</NO.P><P>text</P></ITEM>`
-/// - NP-wrapped: `<ITEM><NP><NO.P>1.</NO.P><TXT>text</TXT></NP></ITEM>` (e.g. Annex IV)
-fn parse_list(node: Node) -> Vec<ContentBlock> {
-    node.children()
-        .filter(|n| n.is_element() && n.tag_name().name() == "ITEM")
-        .map(|item| {
-            // Prefer the <NP> wrapper structure when present.
-            if let Some(np) = item
-                .children()
-                .find(|n| n.is_element() && n.tag_name().name() == "NP")
-            {
-                let number = np
-                    .children()
-                    .find(|n| n.is_element() && n.tag_name().name() == "NO.P")
-                    .map(extract_text)
-                    .unwrap_or_default();
-                let text = np
-                    .children()
-                    .find(|n| n.is_element() && n.tag_name().name() == "TXT")
-                    .map(extract_text)
-                    .unwrap_or_default();
-                // A <P> inside the <NP> may wrap a nested <LIST> (e.g. Annex III).
-                let sub_items: Vec<ContentBlock> = np
-                    .children()
-                    .filter(|n| n.is_element() && n.tag_name().name() == "P")
-                    .flat_map(|p| {
-                        p.children()
-                            .filter(|n| n.is_element() && n.tag_name().name() == "LIST")
-                            .flat_map(parse_list)
-                    })
-                    .collect();
-                ContentBlock::ListItem { number, text, sub_items }
-            } else {
-                let number = item
-                    .children()
-                    .find(|n| n.is_element() && n.tag_name().name() == "NO.P")
-                    .map(extract_text)
-                    .unwrap_or_default();
-                // An item may have multiple <P> children; join them with a space.
-                let text = item
-                    .children()
-                    .filter(|n| n.is_element() && n.tag_name().name() == "P")
-                    .map(extract_text)
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                ContentBlock::ListItem { number, text, sub_items: vec![] }
-            }
-        })
-        .collect()
 }
 
 /// Converts a `<GR.SEQ>` element into a [`ContentBlock::Section`].

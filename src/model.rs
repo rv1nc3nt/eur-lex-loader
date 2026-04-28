@@ -111,8 +111,11 @@ pub struct Paragraph {
     /// Paragraph number, e.g. `"1."` (from `<NO.PARAG>`). `None` for articles
     /// that use bare `<ALINEA>` elements without a `<PARAG>` wrapper.
     pub number: Option<String>,
-    /// Plain-text content of each `<ALINEA>` in this paragraph.
-    pub alineas: Vec<String>,
+    /// Content blocks of each `<ALINEA>` in this paragraph. A plain alinea
+    /// becomes a [`ContentBlock::Paragraph`]; an alinea that contains a
+    /// `<LIST>` expands into a mix of `Paragraph` (intro text) and
+    /// [`ContentBlock::ListItem`] entries.
+    pub alineas: Vec<ContentBlock>,
 }
 
 /// A parsed annex file (`<ANNEX>`).

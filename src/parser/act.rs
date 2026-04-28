@@ -3,6 +3,7 @@ use roxmltree::{Document, Node};
 use crate::error::Error;
 use crate::model::*;
 use crate::text::extract_text;
+use super::parse_list;
 
 /// Parses a Formex main-act XML string (`<ACT>` root) into its three parts.
 ///
@@ -204,7 +205,7 @@ fn parse_article(node: Node) -> Result<Article, Error> {
             .collect::<Result<Vec<_>, _>>()?
     } else {
         // Articles without <PARAG> wrappers use bare <ALINEA> children.
-        let alineas: Vec<String> = node
+        let alineas: Vec<ContentBlock> = node
             .children()
             .filter(|n| n.is_element() && n.tag_name().name() == "ALINEA")
             .flat_map(expand_alinea)
@@ -222,7 +223,7 @@ fn parse_paragraph(node: Node) -> Result<Paragraph, Error> {
         .find(|n| n.is_element() && n.tag_name().name() == "NO.PARAG")
         .map(extract_text);
 
-    let alineas: Vec<String> = node
+    let alineas: Vec<ContentBlock> = node
         .children()
         .filter(|n| n.is_element() && n.tag_name().name() == "ALINEA")
         .flat_map(expand_alinea)
@@ -231,45 +232,39 @@ fn parse_paragraph(node: Node) -> Result<Paragraph, Error> {
     Ok(Paragraph { number, alineas })
 }
 
-/// Expands a single `<ALINEA>` element into one or more plain-text strings.
+/// Expands a single `<ALINEA>` element into one or more [`ContentBlock`]s.
 ///
-/// When an alinea contains a `<LIST>`, each `<ITEM>` becomes its own string
-/// rather than being collapsed into a single blob. Any `<P>` children before
-/// or after the list are emitted as individual strings first.
-///
-/// Falls back to [`extract_text`] on the whole node when the alinea has no
-/// recognised block children (e.g. it contains only inline text or `<HT>` tags).
-fn expand_alinea(node: Node) -> Vec<String> {
-    let mut result = Vec::new();
+/// - `<P>` children become [`ContentBlock::Paragraph`].
+/// - `<LIST>` children are expanded via [`parse_list`] into
+///   [`ContentBlock::ListItem`] entries (with nested sub-items when present).
+/// - Falls back to a single `Paragraph` when the alinea has no recognised
+///   block children (pure inline text, `<HT>`, `<QUOT.START>`, etc.).
+fn expand_alinea(node: Node) -> Vec<ContentBlock> {
+    let mut result: Vec<ContentBlock> = Vec::new();
     for child in node.children().filter(|n| n.is_element()) {
         match child.tag_name().name() {
             "P" => {
                 let t = extract_text(child);
                 if !t.is_empty() {
-                    result.push(t);
+                    result.push(ContentBlock::Paragraph(t));
                 }
             }
             "LIST" => {
-                for item in child
-                    .children()
-                    .filter(|n| n.is_element() && n.tag_name().name() == "ITEM")
-                {
-                    result.push(extract_text(item));
-                }
+                result.extend(parse_list(child));
             }
             _ => {
                 let t = extract_text(child);
                 if !t.is_empty() {
-                    result.push(t);
+                    result.push(ContentBlock::Paragraph(t));
                 }
             }
         }
     }
-    // Pure inline alinea with no block children — treat the whole thing as one string.
+    // Pure inline alinea — wrap the whole text as a single Paragraph.
     if result.is_empty() {
         let t = extract_text(node);
         if !t.is_empty() {
-            result.push(t);
+            result.push(ContentBlock::Paragraph(t));
         }
     }
     result
@@ -395,7 +390,8 @@ mod tests {
         assert_eq!(art.title.as_deref(), Some("Classification rules"));
         assert_eq!(art.paragraphs.len(), 2);
         assert_eq!(art.paragraphs[0].number.as_deref(), Some("1."));
-        assert_eq!(art.paragraphs[1].alineas[0], "Second paragraph.");
+        assert!(matches!(&art.paragraphs[1].alineas[0],
+            ContentBlock::Paragraph(t) if t == "Second paragraph."));
     }
 
     #[test]
@@ -409,7 +405,54 @@ mod tests {
         let art = parse_article(d.root_element()).unwrap();
         assert_eq!(art.paragraphs.len(), 1);
         assert!(art.paragraphs[0].number.is_none());
-        assert_eq!(art.paragraphs[0].alineas[0], "Only text.");
+        assert!(matches!(&art.paragraphs[0].alineas[0], ContentBlock::Paragraph(t) if t == "Only text."));
+    }
+
+    #[test]
+    fn alinea_list_items_are_content_blocks() {
+        // A <LIST> inside an <ALINEA> must produce ContentBlock::ListItem entries,
+        // not plain strings — matching Article 5's prohibited-practices list.
+        let xml = r#"<ARTICLE>
+            <TI.ART>Article 5</TI.ART>
+            <PARAG>
+                <NO.PARAG>1.</NO.PARAG>
+                <ALINEA>
+                    <P>The following shall be prohibited:</P>
+                    <LIST TYPE="alpha">
+                        <ITEM><NP><NO.P>(a)</NO.P><TXT>Practice A.</TXT></NP></ITEM>
+                        <ITEM><NP>
+                            <NO.P>(b)</NO.P>
+                            <TXT>Practice B:</TXT>
+                            <P><LIST TYPE="roman">
+                                <ITEM><NP><NO.P>(i)</NO.P><TXT>Sub-practice i.</TXT></NP></ITEM>
+                                <ITEM><NP><NO.P>(ii)</NO.P><TXT>Sub-practice ii.</TXT></NP></ITEM>
+                            </LIST></P>
+                        </NP></ITEM>
+                    </LIST>
+                </ALINEA>
+                <ALINEA>Point (b) is without prejudice to existing rules.</ALINEA>
+            </PARAG>
+        </ARTICLE>"#;
+        let d = doc(xml);
+        let art = parse_article(d.root_element()).unwrap();
+        assert_eq!(art.paragraphs.len(), 1);
+        let alineas = &art.paragraphs[0].alineas;
+        // Paragraph intro + 2 list items + plain trailing alinea = 4 blocks.
+        assert_eq!(alineas.len(), 4);
+        assert!(matches!(&alineas[0], ContentBlock::Paragraph(t) if t.contains("prohibited")));
+        assert!(matches!(&alineas[1], ContentBlock::ListItem { number, sub_items, .. }
+            if number == "(a)" && sub_items.is_empty()));
+        match &alineas[2] {
+            ContentBlock::ListItem { number, text, sub_items } => {
+                assert_eq!(number, "(b)");
+                assert_eq!(text, "Practice B:");
+                assert_eq!(sub_items.len(), 2);
+                assert!(matches!(&sub_items[0], ContentBlock::ListItem { number, .. } if number == "(i)"));
+                assert!(matches!(&sub_items[1], ContentBlock::ListItem { number, .. } if number == "(ii)"));
+            }
+            _ => panic!("expected ListItem at alineas[2]"),
+        }
+        assert!(matches!(&alineas[3], ContentBlock::Paragraph(t) if t.contains("prejudice")));
     }
 
     #[test]
@@ -434,8 +477,10 @@ mod tests {
         let alineas = &art.paragraphs[0].alineas;
         // intro + 2 list items = 3 alineas
         assert_eq!(alineas.len(), 3);
-        assert_eq!(alineas[0], "For the purposes of this Regulation:");
-        assert!(alineas[1].contains("(1)") && alineas[1].contains("first definition"));
-        assert!(alineas[2].contains("(2)") && alineas[2].contains("second definition"));
+        assert!(matches!(&alineas[0], ContentBlock::Paragraph(t) if t == "For the purposes of this Regulation:"));
+        assert!(matches!(&alineas[1], ContentBlock::ListItem { number, text, .. }
+            if number == "(1)" && text == "first definition"));
+        assert!(matches!(&alineas[2], ContentBlock::ListItem { number, text, .. }
+            if number == "(2)" && text == "second definition"));
     }
 }
