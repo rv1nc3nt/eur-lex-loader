@@ -37,7 +37,7 @@ pub fn load_regulation(data_dir: &Path) -> Result<Regulation, Error> {
     Ok(Regulation { title, preamble, enacting_terms, annexes })
 }
 
-/// Scans `data_dir` for the `*.doc.fmx.xml` registry file.
+/// Scans `data_dir` for the `*.doc.fmx.xml` or `*.doc.xml` registry file.
 fn find_doc_file(data_dir: &Path) -> Result<std::path::PathBuf, Error> {
     let entries = fs::read_dir(data_dir).map_err(|e| Error::Io {
         path: data_dir.display().to_string(),
@@ -47,12 +47,12 @@ fn find_doc_file(data_dir: &Path) -> Result<std::path::PathBuf, Error> {
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        if name.ends_with(".doc.fmx.xml") {
+        if name.ends_with(".doc.fmx.xml") || name.ends_with(".doc.xml") {
             return Ok(entry.path());
         }
     }
 
-    Err(Error::MissingElement("*.doc.fmx.xml"))
+    Err(Error::MissingElement("*.doc.fmx.xml or *.doc.xml"))
 }
 
 /// Parses a `.doc.fmx.xml` registry to obtain the ordered list of files.
