@@ -20,7 +20,7 @@ use roxmltree::Node;
 /// # Example
 ///
 /// ```
-/// use euro_lex_loader::text::extract_text;
+/// use eur_lex_loader::text::extract_text;
 ///
 /// let xml = r#"<P>Hello <NOTE NOTE.ID="n1"><P>fn</P></NOTE> world.</P>"#;
 /// let doc = roxmltree::Document::parse(xml).unwrap();

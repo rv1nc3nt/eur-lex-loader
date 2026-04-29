@@ -348,7 +348,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "euro-lex-loader"
+name = "eur-lex-loader"
 version = "0.1.0"
 dependencies = [
  "clap",

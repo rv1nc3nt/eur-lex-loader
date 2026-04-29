@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use euro_lex_loader::loader::load_regulation;
-use euro_lex_loader::model::Regulation;
+use eur_lex_loader::loader::load_regulation;
+use eur_lex_loader::model::Regulation;
 
 /// Load a Formex regulation and output it as JSON.
 ///
@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.output {
         Some(ref path) => std::fs::write(path, &json).map_err(|e| {
-            euro_lex_loader::error::Error::Io { path: path.display().to_string(), source: e }
+            eur_lex_loader::error::Error::Io { path: path.display().to_string(), source: e }
         })?,
         None => println!("{json}"),
     }

@@ -4,8 +4,8 @@
 /// and act as a regression guard against parser changes.
 use std::path::Path;
 
-use euro_lex_loader::loader::load_regulation;
-use euro_lex_loader::model::{ChapterContents, ContentBlock};
+use eur_lex_loader::loader::load_regulation;
+use eur_lex_loader::model::{ChapterContents, ContentBlock};
 
 #[test]
 fn dsa_structure() {

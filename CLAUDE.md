@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`euro-lex-loader` is a Rust project (edition 2024) in early development. The entry point is `src/main.rs`.
+`eur-lex-loader` is a Rust project (edition 2024) in early development. The entry point is `src/main.rs`.
 
 ## Commands
 
