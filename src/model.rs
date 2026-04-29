@@ -1,6 +1,7 @@
 use serde::Serialize;
 
-/// A complete EU regulation assembled from a Formex publication directory.
+/// A complete EU legislative act (regulation or directive) assembled from a
+/// Formex publication directory.
 ///
 /// Combines the main act file (`*.000101.fmx.xml`) with all annex files
 /// (`*.012401.fmx.xml`, etc.) discovered via the `.doc.fmx.xml` registry.
@@ -8,9 +9,11 @@ use serde::Serialize;
 pub struct Regulation {
     /// The full title of the regulation, e.g. `"Regulation (EU) 2024/1689 …"`.
     pub title: String,
-    /// The preamble preceding the operative articles.
+    /// The preamble preceding the operative articles: opening formula, legal
+    /// basis citations (visas), numbered recitals, and enacting formula.
     pub preamble: Preamble,
-    /// The operative body of the regulation: chapters, sections, and articles.
+    /// The operative body of the act, structured as chapters that contain
+    /// either sections or articles directly.
     pub enacting_terms: EnactingTerms,
     /// The annexes, in the order declared by the `.doc.fmx.xml` registry.
     pub annexes: Vec<Annex>,
@@ -65,7 +68,8 @@ pub struct Chapter {
     pub title: String,
     /// Optional chapter subtitle, e.g. `"General provisions"` (from `<TITLE><STI>`).
     pub subtitle: Option<String>,
-    /// Either a list of sections or a flat list of articles.
+    /// Either sections (each grouping articles) or articles directly —
+    /// the two forms never mix within a single chapter.
     pub contents: ChapterContents,
 }
 
@@ -83,9 +87,9 @@ pub enum ChapterContents {
 pub struct Section {
     /// Section heading, e.g. `"SECTION 1"` (from `<TITLE><TI>`).
     pub title: String,
-    /// Optional section subtitle (from `<TITLE><STI>`).
+    /// Optional section subtitle (from `<TITLE><STI>`); present only in some acts.
     pub subtitle: Option<String>,
-    /// Articles contained in this section.
+    /// Articles in this section. Sections are never nested further.
     pub articles: Vec<Article>,
 }
 
@@ -97,7 +101,8 @@ pub struct Article {
     /// Optional article title, e.g. `"Classification rules for high-risk AI systems"`
     /// (from `<STI.ART>`).
     pub title: Option<String>,
-    /// The numbered paragraphs of the article.
+    /// The paragraphs of the article. Single-paragraph articles still use
+    /// this vec (length 1, `number: None`).
     pub paragraphs: Vec<Paragraph>,
 }
 
@@ -123,9 +128,11 @@ pub struct Paragraph {
 pub struct Annex {
     /// Annex identifier, e.g. `"ANNEX I"` (from `<TITLE><TI>`).
     pub number: String,
-    /// Optional descriptive subtitle (from `<TITLE><STI>`).
+    /// Optional descriptive subtitle (from `<TITLE><STI>`); present only in some annexes.
     pub subtitle: Option<String>,
-    /// Top-level content blocks from `<CONTENTS>`.
+    /// Top-level content blocks from `<CONTENTS>`: a heterogeneous mix of
+    /// [`ContentBlock::Paragraph`], [`ContentBlock::ListItem`], and
+    /// [`ContentBlock::Section`] entries depending on the annex structure.
     pub content_blocks: Vec<ContentBlock>,
 }
 
@@ -135,7 +142,7 @@ pub struct Annex {
 /// lists, and some group content under `<GR.SEQ>` section headings.
 #[derive(Serialize)]
 pub enum ContentBlock {
-    /// A plain paragraph (`<P>`).
+    /// Plain text extracted from a `<P>` element.
     Paragraph(String),
     /// A numbered list entry (`<ITEM>` inside `<LIST>`, or `<NP>`).
     /// `sub_items` holds any nested `<LIST>` entries; omitted from JSON when empty.
@@ -146,5 +153,10 @@ pub enum ContentBlock {
         sub_items: Vec<ContentBlock>,
     },
     /// A grouped section with its own title (`<GR.SEQ>`).
-    Section { title: String, blocks: Vec<ContentBlock> },
+    Section {
+        /// Section heading (from the `<TITLE>` child of `<GR.SEQ>`).
+        title: String,
+        /// Content blocks nested inside this section.
+        blocks: Vec<ContentBlock>,
+    },
 }

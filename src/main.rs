@@ -54,6 +54,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Fetches a Formex publication from the EUR-Lex Cellar API by CELEX number,
+/// extracts the ZIP to a temporary directory, and parses it via
+/// [`load_regulation`].
 fn fetch_by_celex(celex: &str) -> Result<Regulation, Box<dyn std::error::Error>> {
     let url = format!("http://publications.europa.eu/resource/celex/{celex}");
     let bytes = reqwest::blocking::Client::new()
