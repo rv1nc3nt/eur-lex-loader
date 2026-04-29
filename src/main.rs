@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use clap::Parser;
 use euro_lex_loader::loader::load_regulation;
@@ -8,9 +8,9 @@ use euro_lex_loader::model::Regulation;
 ///
 /// Pass a local directory path, or use `--celex` to fetch directly from
 /// the EUR-Lex Cellar repository. The directory must contain a `*.doc.fmx.xml`
-/// or `*.doc.xml` registry file. See the EU AI Act example in `data/EU_AI_ACT`.
+/// or `*.doc.xml` registry file.
 #[derive(Parser)]
-#[command(version, about)]
+#[command(version, about, arg_required_else_help = true)]
 struct Cli {
     /// Path to the Formex regulation directory (conflicts with --celex).
     dir: Option<PathBuf>,
@@ -34,7 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reg = match (cli.celex.as_deref(), cli.dir.as_deref()) {
         (Some(celex), _) => fetch_by_celex(celex)?,
         (None, Some(dir)) => load_regulation(dir)?,
-        (None, None) => load_regulation(Path::new("data/EU_AI_ACT"))?,
+        (None, None) => unreachable!("clap enforces arg_required_else_help"),
     };
 
     let json = if cli.compact {
