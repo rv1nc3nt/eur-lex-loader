@@ -1,11 +1,11 @@
 //! XML parsers for Formex regulation files.
 //!
-//! Public API: [`parse_act`] and [`parse_annex`] each parse one `.fmx.xml` file
+//! Public API: [`parse_act`](crate::parser::parse_act) and [`parse_annex`](crate::parser::parse_annex) each parse one `.fmx.xml` file
 //! into the corresponding model type. Two `pub(crate)` utilities are shared by
 //! both parsers:
 //!
-//! - [`child`] — looks up a mandatory direct child element by tag name.
-//! - [`parse_list`] — converts a `<LIST>` element into [`ContentBlock::ListItem`]s.
+//! - `child` — looks up a mandatory direct child element by tag name.
+//! - `parse_list` — converts a `<LIST>` element into [`crate::model::ContentBlock::ListItem`]s.
 
 /// Parser for the main act XML file (`<ACT>` root).
 mod act;
