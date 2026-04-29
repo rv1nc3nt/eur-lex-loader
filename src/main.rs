@@ -1,18 +1,23 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use euro_lex_loader::loader::load_regulation;
+use euro_lex_loader::model::Regulation;
 
-/// Load a Formex regulation directory and output it as JSON.
+/// Load a Formex regulation and output it as JSON.
 ///
-/// The directory must contain a `*.doc.fmx.xml` registry file that lists the
-/// main act and all annex files. See the EU AI Act example in `data/EU_AI_ACT`.
+/// Pass a local directory path, or use `--celex` to fetch directly from
+/// the EUR-Lex Cellar repository. The directory must contain a `*.doc.fmx.xml`
+/// or `*.doc.xml` registry file. See the EU AI Act example in `data/EU_AI_ACT`.
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
-    /// Path to the Formex regulation directory.
-    #[arg(default_value = "data/EU_AI_ACT")]
-    dir: PathBuf,
+    /// Path to the Formex regulation directory (conflicts with --celex).
+    dir: Option<PathBuf>,
+
+    /// Fetch a regulation from EUR-Lex Cellar by CELEX number (e.g. 32022R2065).
+    #[arg(long, conflicts_with = "dir")]
+    celex: Option<String>,
 
     /// Write JSON output to FILE instead of stdout.
     #[arg(short, long, value_name = "FILE")]
@@ -23,9 +28,14 @@ struct Cli {
     compact: bool,
 }
 
-fn main() -> Result<(), euro_lex_loader::error::Error> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    let reg = load_regulation(&cli.dir)?;
+
+    let reg = match (cli.celex.as_deref(), cli.dir.as_deref()) {
+        (Some(celex), _) => fetch_by_celex(celex)?,
+        (None, Some(dir)) => load_regulation(dir)?,
+        (None, None) => load_regulation(Path::new("data/EU_AI_ACT"))?,
+    };
 
     let json = if cli.compact {
         serde_json::to_string(&reg)
@@ -35,11 +45,27 @@ fn main() -> Result<(), euro_lex_loader::error::Error> {
     .expect("serialization failed");
 
     match cli.output {
-        Some(ref path) => std::fs::write(path, json).map_err(|e| {
+        Some(ref path) => std::fs::write(path, &json).map_err(|e| {
             euro_lex_loader::error::Error::Io { path: path.display().to_string(), source: e }
         })?,
         None => println!("{json}"),
     }
 
     Ok(())
+}
+
+fn fetch_by_celex(celex: &str) -> Result<Regulation, Box<dyn std::error::Error>> {
+    let url = format!("http://publications.europa.eu/resource/celex/{celex}");
+    let bytes = reqwest::blocking::Client::new()
+        .get(&url)
+        .header("Accept", "application/zip;mtype=fmx4")
+        .header("Accept-Language", "eng")
+        .send()?
+        .error_for_status()?
+        .bytes()?;
+
+    let tmp = tempfile::tempdir()?;
+    zip::ZipArchive::new(std::io::Cursor::new(bytes))?.extract(tmp.path())?;
+
+    Ok(load_regulation(tmp.path())?)
 }
