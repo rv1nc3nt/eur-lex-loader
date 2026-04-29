@@ -5,16 +5,16 @@
 //! by the Publications Office of the European Union. A publication directory
 //! contains a registry file (`*.doc.fmx.xml`) that lists the main act file and
 //! any annex files; this crate discovers those files, parses them, and
-//! assembles a single [`model::Regulation`] value.
+//! assembles a single [`Regulation`] value.
 //!
 //! # Entry point
 //!
-//! [`loader::load_regulation`] is the primary library API. It takes the path
-//! to a Formex publication directory and returns a [`model::Regulation`]:
+//! [`load_regulation`] is the primary library API. It takes the path
+//! to a Formex publication directory and returns a [`Regulation`]:
 //!
 //! ```no_run
 //! use std::path::Path;
-//! use eur_lex_loader::loader::load_regulation;
+//! use eur_lex_loader::load_regulation;
 //!
 //! let reg = load_regulation(Path::new("/path/to/formex/dir")).unwrap();
 //! println!("{}", reg.title);
@@ -33,11 +33,11 @@
 //! 3. Parse the act file into a title, [`model::Preamble`], and
 //!    [`model::EnactingTerms`].
 //! 4. Parse each annex file into an [`model::Annex`].
-//! 5. Assemble everything into a [`model::Regulation`].
+//! 5. Assemble everything into a [`Regulation`].
 
 /// Error types for loading and parsing Formex regulations.
 pub mod error;
-/// File discovery and top-level assembly of a [`model::Regulation`].
+/// File discovery and top-level assembly of a [`Regulation`].
 pub mod loader;
 /// Data model: typed structs representing a parsed EU regulation.
 pub mod model;
@@ -45,3 +45,6 @@ pub mod model;
 pub mod parser;
 /// Plain-text extraction from Formex mixed-content XML nodes.
 pub mod text;
+
+pub use loader::load_regulation;
+pub use model::Regulation;
