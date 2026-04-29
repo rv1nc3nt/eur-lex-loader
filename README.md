@@ -34,6 +34,7 @@ Examples:
 | EU AI Act (2024) | `32024R1689` |
 | GDPR (2016) | `32016R0679` |
 | DSA (2022) | `32022R2065` |
+| EU Trade Mark Regulation (2017) | `32017R1001` |
 
 The CELEX number appears in the EUR-Lex URL for any regulation, e.g.:
 `https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689`
@@ -91,22 +92,28 @@ The compiled binary is at `target/release/euro-lex-loader`.
 euro-lex-loader [OPTIONS] [DIR]
 
 Arguments:
-  [DIR]  Path to the Formex regulation directory [default: data/EU_AI_ACT]
+  [DIR]  Path to a local Formex regulation directory
 
 Options:
+  -c, --celex <CELEX>  Fetch from EUR-Lex Cellar by CELEX number (e.g. 32022R2065)
   -o, --output <FILE>  Write JSON output to FILE instead of stdout
-  -c, --compact        Output compact JSON (default: pretty-printed)
+      --compact        Output compact JSON (default: pretty-printed)
   -h, --help           Print help
   -V, --version        Print version
 ```
 
+`DIR` and `--celex` are mutually exclusive. Running with no arguments prints help.
+
 ### Examples
 
 ```bash
-# Parse the bundled EU AI Act example and pretty-print to stdout
-euro-lex-loader
+# Fetch the DSA directly from EUR-Lex and pretty-print to stdout
+euro-lex-loader -c 32022R2065
 
-# Parse a downloaded regulation
+# Fetch the EU AI Act and write compact JSON to a file
+euro-lex-loader -c 32024R1689 --compact --output ai_act.json
+
+# Parse a previously downloaded regulation
 euro-lex-loader data/MY_REGULATION
 
 # Write compact JSON to a file
@@ -216,9 +223,15 @@ The public API is documented with `cargo doc --open`.
 cargo test
 ```
 
-Unit tests live alongside their source modules. The integration test in
-`tests/eu_ai_act.rs` validates the full parse of the bundled EU AI Act against
-known structural counts (113 articles, 180 recitals, 13 chapters, 13 annexes).
+Unit tests live alongside their source modules. Integration tests validate the
+full parse of four different EU legislative acts against known structural counts:
+
+| File | Act | Articles | Recitals |
+|---|---|---|---|
+| `tests/eu_ai_act.rs` | EU AI Act (32024R1689) | 113 | 180 |
+| `tests/dsa.rs` | Digital Services Act (32022R2065) | 93 | 156 |
+| `tests/dsma.rs` | Copyright in the Digital Single Market (32019L0790) | 32 | 86 |
+| `tests/trademark_act.rs` | EU Trade Mark Regulation (32017R1001) | 212 | 48 |
 
 ---
 

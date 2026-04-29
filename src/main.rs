@@ -16,7 +16,7 @@ struct Cli {
     dir: Option<PathBuf>,
 
     /// Fetch a regulation from EUR-Lex Cellar by CELEX number (e.g. 32022R2065).
-    #[arg(long, conflicts_with = "dir")]
+    #[arg(short, long, conflicts_with = "dir")]
     celex: Option<String>,
 
     /// Write JSON output to FILE instead of stdout.
@@ -24,7 +24,7 @@ struct Cli {
     output: Option<PathBuf>,
 
     /// Output compact JSON (default: pretty-printed).
-    #[arg(short, long)]
+    #[arg(long)]
     compact: bool,
 }
 
