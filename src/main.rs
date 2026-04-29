@@ -67,5 +67,8 @@ fn fetch_by_celex(celex: &str) -> Result<Regulation, Box<dyn std::error::Error>>
     let tmp = tempfile::tempdir()?;
     zip::ZipArchive::new(std::io::Cursor::new(bytes))?.extract(tmp.path())?;
 
+    // `tmp` must remain in scope until load_regulation returns: TempDir deletes
+    // the directory on drop, so moving it out or shortening its scope would
+    // cause load_regulation to receive a path that no longer exists.
     Ok(load_regulation(tmp.path())?)
 }

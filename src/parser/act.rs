@@ -197,7 +197,10 @@ fn parse_article(node: Node) -> Result<Article, Error> {
             .map(parse_paragraph)
             .collect::<Result<Vec<_>, _>>()?
     } else {
-        // Articles without <PARAG> wrappers use bare <ALINEA> children.
+        // Some articles have bare <ALINEA> children with no <PARAG> wrapper and
+        // therefore no paragraph numbers. All alineas are grouped into a single
+        // anonymous paragraph to keep the model uniform (every article has at
+        // least one Paragraph). Real example: Article 3 of the DSA.
         let alineas: Vec<ContentBlock> = node
             .children()
             .filter(|n| n.is_element() && n.tag_name().name() == "ALINEA")
@@ -246,6 +249,9 @@ fn expand_alinea(node: Node) -> Vec<ContentBlock> {
                 result.extend(parse_list(child));
             }
             _ => {
+                // Unrecognised block elements (e.g. <TABLE>, <FORMULA>) are
+                // reduced to their text content. Structure is lost but no text
+                // is silently dropped.
                 let t = extract_text(child);
                 if !t.is_empty() {
                     result.push(ContentBlock::Paragraph(t));

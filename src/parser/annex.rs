@@ -53,8 +53,9 @@ fn parse_contents(node: Node) -> Vec<ContentBlock> {
         match child.tag_name().name() {
             "P" => {
                 // A <P> sometimes wraps a <LIST> instead of containing inline text
-                // (e.g. Annex III). Dispatch to parse_list so items are not
-                // flattened into a single paragraph string.
+                // (e.g. Annex III of the EU AI Act). When that is the case the
+                // <P>'s own text is discarded — it is always boilerplate like
+                // "The following …" whose meaning is carried by the items anyway.
                 let lists: Vec<_> = child
                     .children()
                     .filter(|n| n.is_element() && n.tag_name().name() == "LIST")
@@ -77,6 +78,9 @@ fn parse_contents(node: Node) -> Vec<ContentBlock> {
                     .find(|n| n.is_element() && n.tag_name().name() == "NO.P")
                     .map(extract_text)
                     .unwrap_or_default();
+                // <TXT> is the standard body element, but some Formex variants
+                // omit it and place text directly inside <NP>. Fall back to
+                // extracting the whole <NP> text in that case.
                 let text = child
                     .children()
                     .find(|n| n.is_element() && n.tag_name().name() == "TXT")
