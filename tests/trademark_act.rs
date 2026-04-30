@@ -5,15 +5,15 @@
 /// and act as a regression guard against parser changes.
 use std::path::Path;
 
-use eur_lex_loader::loader::load_regulation;
+use eur_lex_loader::loader::load_act;
 use eur_lex_loader::model::{ChapterContents, Subparagraph};
 
 #[test]
 fn trademark_act_structure() {
-    let reg = load_regulation(Path::new("data/TrademarkAct"))
+    let reg = load_act(Path::new("data/TrademarkAct"))
         .expect("failed to load TrademarkAct from data/TrademarkAct");
 
-    // Title must identify the regulation number.
+    // Title must identify the act number.
     assert!(
         reg.title.contains("2017/1001"),
         "title did not contain '2017/1001': {}",

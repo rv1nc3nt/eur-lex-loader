@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use eur_lex_loader::loader::load_regulation;
-use eur_lex_loader::model::Regulation;
+use eur_lex_loader::loader::load_act;
+use eur_lex_loader::model::Act;
 
-/// Load a Formex regulation and output it as JSON.
+/// Load a Formex act and output it as JSON.
 ///
 /// Pass a local directory path, or use `--celex` to fetch directly from
 /// the EUR-Lex Cellar repository. The directory must contain a `*.doc.fmx.xml`
@@ -12,10 +12,10 @@ use eur_lex_loader::model::Regulation;
 #[derive(Parser)]
 #[command(version, about, arg_required_else_help = true)]
 struct Cli {
-    /// Path to the Formex regulation directory (conflicts with --celex).
+    /// Path to the Formex act directory (conflicts with --celex).
     dir: Option<PathBuf>,
 
-    /// Fetch a regulation from EUR-Lex Cellar by CELEX number (e.g. 32022R2065).
+    /// Fetch an act from EUR-Lex Cellar by CELEX number (e.g. 32022R2065).
     #[arg(short, long, conflicts_with = "dir")]
     celex: Option<String>,
 
@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let reg = match (cli.celex.as_deref(), cli.dir.as_deref()) {
         (Some(celex), _) => fetch_by_celex(celex)?,
-        (None, Some(dir)) => load_regulation(dir)?,
+        (None, Some(dir)) => load_act(dir)?,
         (None, None) => unreachable!("clap enforces arg_required_else_help"),
     };
 
@@ -56,8 +56,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Fetches a Formex publication from the EUR-Lex Cellar API by CELEX number,
 /// extracts the ZIP to a temporary directory, and parses it via
-/// [`load_regulation`].
-fn fetch_by_celex(celex: &str) -> Result<Regulation, Box<dyn std::error::Error>> {
+/// [`load_act`].
+fn fetch_by_celex(celex: &str) -> Result<Act, Box<dyn std::error::Error>> {
     let url = format!("http://publications.europa.eu/resource/celex/{celex}");
     let bytes = reqwest::blocking::Client::new()
         .get(&url)
@@ -70,8 +70,8 @@ fn fetch_by_celex(celex: &str) -> Result<Regulation, Box<dyn std::error::Error>>
     let tmp = tempfile::tempdir()?;
     zip::ZipArchive::new(std::io::Cursor::new(bytes))?.extract(tmp.path())?;
 
-    // `tmp` must remain in scope until load_regulation returns: TempDir deletes
+    // `tmp` must remain in scope until load_act returns: TempDir deletes
     // the directory on drop, so moving it out or shortening its scope would
-    // cause load_regulation to receive a path that no longer exists.
-    Ok(load_regulation(tmp.path())?)
+    // cause load_act to receive a path that no longer exists.
+    Ok(load_act(tmp.path())?)
 }

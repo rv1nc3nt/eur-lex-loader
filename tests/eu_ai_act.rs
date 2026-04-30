@@ -4,15 +4,15 @@
 /// and act as a regression guard against parser changes.
 use std::path::Path;
 
-use eur_lex_loader::loader::load_regulation;
+use eur_lex_loader::loader::load_act;
 use eur_lex_loader::model::{ChapterContents, ListBlock, Subparagraph};
 
 #[test]
 fn eu_ai_act_structure() {
-    let reg = load_regulation(Path::new("data/EU_AI_ACT"))
+    let reg = load_act(Path::new("data/EU_AI_ACT"))
         .expect("failed to load EU AI Act from data/EU_AI_ACT");
 
-    // Title must identify the regulation number.
+    // Title must identify the act number.
     assert!(
         reg.title.contains("2024/1689"),
         "title did not contain '2024/1689': {}",

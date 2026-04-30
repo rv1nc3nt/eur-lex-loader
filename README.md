@@ -1,8 +1,8 @@
 # eur-lex-loader
 
-A Rust library and command-line tool for parsing EU regulations published in
-[Formex 4](https://op.europa.eu/en/web/eu-vocabularies/formex) XML format and
-converting them to JSON.
+A Rust library and command-line tool for parsing EU acts (regulations and
+directives) published in [Formex 4](https://op.europa.eu/en/web/eu-vocabularies/formex)
+XML format and converting them to JSON.
 
 The library extracts the full document structure: title, preamble (legal bases
 and recitals), enacting terms (chapters, sections, and articles with nested
@@ -12,7 +12,7 @@ lists), and annexes.
 
 ## Getting the data
 
-EU regulations are published as Formex XML files in the
+EU acts are published as Formex XML files in the
 [Cellar](https://op.europa.eu/en/web/cellar) repository maintained by the
 Publications Office of the European Union. No API key or account is required.
 
@@ -23,26 +23,27 @@ Every EU legal act has a CELEX number. The format for regulations is:
 ```
 3 YYYY R NNNN
 │  │   │  └─ sequential number within the year
-│  │   └─ document type (R = Regulation)
+│  │   └─ document type (R = Regulation, L = Directive)
 │  └─ year of publication
 └─ sector (3 = secondary legislation)
 ```
 
 Examples:
-| Regulation | CELEX |
+| Act | CELEX |
 |---|---|
 | EU AI Act (2024) | `32024R1689` |
 | GDPR (2016) | `32016R0679` |
 | DSA (2022) | `32022R2065` |
 | EU Trade Mark Regulation (2017) | `32017R1001` |
+| Copyright in the Digital Single Market Directive (2019) | `32019L0790` |
 
-The CELEX number appears in the EUR-Lex URL for any regulation, e.g.:
+The CELEX number appears in the EUR-Lex URL for any act, e.g.:
 `https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689`
 
 ### Downloading Formex XML
 
-Use the Cellar REST API to download a ZIP archive of all Formex files for a
-regulation. Pass the CELEX number directly in the URL:
+Use the Cellar REST API to download a ZIP archive of all Formex files for an
+act. Pass the CELEX number directly in the URL:
 
 ```bash
 curl -L \
@@ -212,13 +213,13 @@ eur-lex-loader = { path = "…" }
 ```
 
 ```rust
-use eur_lex_loader::loader::load_regulation;
+use eur_lex_loader::loader::load_act;
 use std::path::Path;
 
 fn main() -> Result<(), eur_lex_loader::error::Error> {
-    let reg = load_regulation(Path::new("data/MY_REGULATION"))?;
-    println!("Title: {}", reg.title);
-    println!("Recitals: {}", reg.preamble.recitals.len());
+    let act = load_act(Path::new("data/MY_REGULATION"))?;
+    println!("Title: {}", act.title);
+    println!("Recitals: {}", act.preamble.recitals.len());
     Ok(())
 }
 ```

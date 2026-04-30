@@ -5,12 +5,12 @@
 /// and act as a regression guard against parser changes.
 use std::path::Path;
 
-use eur_lex_loader::loader::load_regulation;
+use eur_lex_loader::loader::load_act;
 use eur_lex_loader::model::{ChapterContents, Subparagraph};
 
 #[test]
 fn dsma_structure() {
-    let reg = load_regulation(Path::new("data/DSMA"))
+    let reg = load_act(Path::new("data/DSMA"))
         .expect("failed to load DSMA from data/DSMA");
 
     // Title must identify the directive number.

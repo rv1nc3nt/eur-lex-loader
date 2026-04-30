@@ -4,10 +4,10 @@ use std::path::Path;
 use roxmltree::Document;
 
 use crate::error::Error;
-use crate::model::Regulation;
+use crate::model::Act;
 use crate::parser::{parse_act, parse_annex};
 
-/// Loads a complete regulation from a directory of Formex `.fmx.xml` files.
+/// Loads a complete act from a directory of Formex `.fmx.xml` files.
 ///
 /// The directory must contain exactly one `*.doc.fmx.xml` registry file.
 /// That registry is parsed first to discover the canonical filename of the
@@ -19,7 +19,7 @@ use crate::parser::{parse_act, parse_annex};
 /// Returns [`Error::Io`] if the directory cannot be read or a file is missing,
 /// [`Error::Xml`] if any file contains malformed XML, and
 /// [`Error::MissingElement`] if a required Formex element is absent.
-pub fn load_regulation(data_dir: &Path) -> Result<Regulation, Error> {
+pub fn load_act(data_dir: &Path) -> Result<Act, Error> {
     let doc_file = find_doc_file(data_dir)?;
     let (main_file, annex_files) = discover_files(&doc_file)?;
 
@@ -34,7 +34,7 @@ pub fn load_regulation(data_dir: &Path) -> Result<Regulation, Error> {
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(Regulation { title, preamble, enacting_terms, annexes })
+    Ok(Act { title, preamble, enacting_terms, annexes })
 }
 
 /// Scans `data_dir` for the `*.doc.fmx.xml` or `*.doc.xml` registry file.

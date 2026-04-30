@@ -1,4 +1,4 @@
-//! XML parsers for Formex regulation files.
+//! XML parsers for Formex act files.
 //!
 //! Public API: [`parse_act`](crate::parser::parse_act) and [`parse_annex`](crate::parser::parse_annex) each parse one `.fmx.xml` file
 //! into the corresponding model type. Two `pub(crate)` utilities are shared by

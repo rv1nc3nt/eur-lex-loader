@@ -4,14 +4,14 @@
 /// and act as a regression guard against parser changes.
 use std::path::Path;
 
-use eur_lex_loader::loader::load_regulation;
+use eur_lex_loader::loader::load_act;
 use eur_lex_loader::model::{ChapterContents, Subparagraph};
 
 #[test]
 fn dsa_structure() {
-    let reg = load_regulation(Path::new("data/DSA")).expect("failed to load DSA from data/DSA");
+    let reg = load_act(Path::new("data/DSA")).expect("failed to load DSA from data/DSA");
 
-    // Title must identify the regulation number.
+    // Title must identify the act number.
     assert!(
         reg.title.contains("2022/2065"),
         "title did not contain '2022/2065': {}",

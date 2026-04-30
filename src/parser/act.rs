@@ -8,7 +8,7 @@ use super::{child, parse_block_children};
 /// Parses a Formex main-act XML string (`<ACT>` root) into its three parts.
 ///
 /// Returns `(title, preamble, enacting_terms)`.  The caller is responsible for
-/// combining these with parsed annexes to build a [`crate::model::Regulation`].
+/// combining these with parsed annexes to build a [`crate::model::Act`].
 ///
 /// # Errors
 ///
@@ -269,10 +269,10 @@ mod tests {
 
     #[test]
     fn title_joins_p_elements() {
-        let xml = "<TITLE><TI><P>Regulation</P><P>of 1 January</P></TI></TITLE>";
+        let xml = "<TITLE><TI><P>Act</P><P>of 1 January</P></TI></TITLE>";
         let d = doc(xml);
         let result = parse_title(d.root_element()).unwrap();
-        assert_eq!(result, "Regulation of 1 January");
+        assert_eq!(result, "Act of 1 January");
     }
 
     // ── preamble ──────────────────────────────────────────────────────────────

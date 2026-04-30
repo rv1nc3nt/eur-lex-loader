@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize}; // Deserialize needed for Subparagraph/List
 /// Combines the main act file (`*.000101.fmx.xml`) with all annex files
 /// (`*.012401.fmx.xml`, etc.) discovered via the `.doc.fmx.xml` registry.
 #[derive(Serialize)]
-pub struct Regulation {
-    /// The full title of the regulation, e.g. `"Regulation (EU) 2024/1689 …"`.
+pub struct Act {
+    /// The full title of the act, e.g. `"Regulation (EU) 2024/1689 …"`.
     pub title: String,
     /// The preamble preceding the operative articles: opening formula, legal
     /// basis citations (visas), numbered recitals, and enacting formula.
@@ -19,7 +19,7 @@ pub struct Regulation {
     pub annexes: Vec<Annex>,
 }
 
-/// The preamble of a regulation (`<PREAMBLE>`).
+/// The preamble of an act (`<PREAMBLE>`).
 ///
 /// Formex splits the preamble into four structural parts: the opening
 /// institutional formula (`PREAMBLE.INIT`), the legal bases (`GR.VISA`),
@@ -50,7 +50,7 @@ pub struct Recital {
     pub text: String,
 }
 
-/// The operative body of the regulation (`<ENACTING.TERMS>`).
+/// The operative body of the act (`<ENACTING.TERMS>`).
 #[derive(Serialize)]
 pub struct EnactingTerms {
     /// Top-level chapters, mapped from `<DIVISION>` elements directly inside
@@ -58,7 +58,7 @@ pub struct EnactingTerms {
     pub chapters: Vec<Chapter>,
 }
 
-/// A chapter of the regulation (`<DIVISION>` at the top level of `<ENACTING.TERMS>`).
+/// A chapter of the act (`<DIVISION>` at the top level of `<ENACTING.TERMS>`).
 ///
 /// Chapters either contain sections (themselves containing articles) or
 /// articles directly — never both.

@@ -1,4 +1,4 @@
-/// Errors that can occur while loading or parsing a Formex regulation.
+/// Errors that can occur while loading or parsing a Formex act.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// A `roxmltree` XML parse failure (malformed or invalid XML).
