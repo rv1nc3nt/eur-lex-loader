@@ -3,7 +3,7 @@ use roxmltree::{Document, Node};
 use crate::error::Error;
 use crate::model::*;
 use crate::text::extract_text;
-use super::{child, parse_list};
+use super::{child, parse_list_as_subparagraphs};
 
 /// Parses a Formex main-act XML string (`<ACT>` root) into its three parts.
 ///
@@ -201,7 +201,7 @@ fn parse_article(node: Node) -> Result<Article, Error> {
         // therefore no paragraph numbers. All alineas are grouped into a single
         // anonymous paragraph to keep the model uniform (every article has at
         // least one Paragraph). Real example: Article 3 of the DSA.
-        let alineas: Vec<ContentBlock> = node
+        let alineas: Vec<Subparagraph> = node
             .children()
             .filter(|n| n.is_element() && n.tag_name().name() == "ALINEA")
             .flat_map(expand_alinea)
@@ -219,7 +219,7 @@ fn parse_paragraph(node: Node) -> Result<Paragraph, Error> {
         .find(|n| n.is_element() && n.tag_name().name() == "NO.PARAG")
         .map(extract_text);
 
-    let alineas: Vec<ContentBlock> = node
+    let alineas: Vec<Subparagraph> = node
         .children()
         .filter(|n| n.is_element() && n.tag_name().name() == "ALINEA")
         .flat_map(expand_alinea)
@@ -228,42 +228,61 @@ fn parse_paragraph(node: Node) -> Result<Paragraph, Error> {
     Ok(Paragraph { number, alineas })
 }
 
-/// Expands a single `<ALINEA>` element into one or more [`ContentBlock`]s.
+/// Expands a single `<ALINEA>` element into one or more [`Subparagraph`]s.
 ///
-/// - `<P>` children become [`ContentBlock::Paragraph`].
-/// - `<LIST>` children are expanded via [`parse_list`] into
-///   [`ContentBlock::ListItem`] entries (with nested sub-items when present).
-/// - Falls back to a single `Paragraph` when the alinea has no recognised
-///   block children (pure inline text, `<HT>`, `<QUOT.START>`, etc.).
-fn expand_alinea(node: Node) -> Vec<ContentBlock> {
-    let mut result: Vec<ContentBlock> = Vec::new();
+/// - A `<P>` immediately followed by a `<LIST>` is grouped into a single
+///   [`Subparagraph::List`] with the `<P>` text as the intro.
+/// - A `<P>` with no following `<LIST>` becomes [`Subparagraph::Text`]`(text, None)`.
+/// - A standalone `<LIST>` (no preceding `<P>`) becomes a `List` with an empty intro.
+/// - Falls back to a single `Text` when the alinea has no block children
+///   (pure inline text, `<HT>`, `<QUOT.START>`, etc.).
+fn expand_alinea(node: Node) -> Vec<Subparagraph> {
+    let mut result: Vec<Subparagraph> = Vec::new();
+    let mut pending: Option<String> = None;
+
     for child in node.children().filter(|n| n.is_element()) {
         match child.tag_name().name() {
             "P" => {
+                // Flush any previous pending text as a plain Text block.
+                if let Some(t) = pending.take() {
+                    result.push(Subparagraph::Text { text: t, number: None });
+                }
                 let t = extract_text(child);
                 if !t.is_empty() {
-                    result.push(ContentBlock::Paragraph(t));
+                    pending = Some(t);
                 }
             }
             "LIST" => {
-                result.extend(parse_list(child));
+                let intro = pending.take().unwrap_or_default();
+                result.push(Subparagraph::List(ListBlock {
+                    number: None,
+                    intro,
+                    items: parse_list_as_subparagraphs(child),
+                }));
             }
             _ => {
                 // Unrecognised block elements (e.g. <TABLE>, <FORMULA>) are
                 // reduced to their text content. Structure is lost but no text
                 // is silently dropped.
+                if let Some(t) = pending.take() {
+                    result.push(Subparagraph::Text { text: t, number: None });
+                }
                 let t = extract_text(child);
                 if !t.is_empty() {
-                    result.push(ContentBlock::Paragraph(t));
+                    pending = Some(t);
                 }
             }
         }
     }
-    // Pure inline alinea — wrap the whole text as a single Paragraph.
+    // Flush any trailing <P> not followed by a <LIST>.
+    if let Some(t) = pending {
+        result.push(Subparagraph::Text { text: t, number: None });
+    }
+    // Pure inline alinea — wrap the whole text as a single Text block.
     if result.is_empty() {
         let t = extract_text(node);
         if !t.is_empty() {
-            result.push(ContentBlock::Paragraph(t));
+            result.push(Subparagraph::Text { text: t, number: None });
         }
     }
     result
@@ -414,7 +433,7 @@ mod tests {
         assert_eq!(art.paragraphs.len(), 2);
         assert_eq!(art.paragraphs[0].number.as_deref(), Some("1."));
         assert!(matches!(&art.paragraphs[1].alineas[0],
-            ContentBlock::Paragraph(t) if t == "Second paragraph."));
+            Subparagraph::Text { text: t, number: None } if t == "Second paragraph."));
     }
 
     #[test]
@@ -428,13 +447,13 @@ mod tests {
         let art = parse_article(d.root_element()).unwrap();
         assert_eq!(art.paragraphs.len(), 1);
         assert!(art.paragraphs[0].number.is_none());
-        assert!(matches!(&art.paragraphs[0].alineas[0], ContentBlock::Paragraph(t) if t == "Only text."));
+        assert!(matches!(&art.paragraphs[0].alineas[0], Subparagraph::Text { text: t, number: None } if t == "Only text."));
     }
 
     #[test]
     fn alinea_list_items_are_content_blocks() {
-        // A <LIST> inside an <ALINEA> must produce ContentBlock::ListItem entries,
-        // not plain strings — matching Article 5's prohibited-practices list.
+        // A <LIST> inside an <ALINEA> must produce a Subparagraph::List, not flat
+        // text — matching Article 5's prohibited-practices list structure.
         let xml = r#"<ARTICLE>
             <TI.ART>Article 5</TI.ART>
             <PARAG>
@@ -460,29 +479,34 @@ mod tests {
         let art = parse_article(d.root_element()).unwrap();
         assert_eq!(art.paragraphs.len(), 1);
         let alineas = &art.paragraphs[0].alineas;
-        // Paragraph intro + 2 list items + plain trailing alinea = 4 blocks.
-        assert_eq!(alineas.len(), 4);
-        assert!(matches!(&alineas[0], ContentBlock::Paragraph(t) if t.contains("prohibited")));
-        assert!(matches!(&alineas[1], ContentBlock::ListItem { number, sub_items, .. }
-            if number == "(a)" && sub_items.is_empty()));
-        match &alineas[2] {
-            ContentBlock::ListItem { number, text, sub_items } => {
-                assert_eq!(number, "(b)");
-                assert_eq!(text, "Practice B:");
-                assert_eq!(sub_items.len(), 2);
-                assert!(matches!(&sub_items[0], ContentBlock::ListItem { number, .. } if number == "(i)"));
-                assert!(matches!(&sub_items[1], ContentBlock::ListItem { number, .. } if number == "(ii)"));
+        // Intro+list grouped into one List block + plain trailing alinea = 2 blocks.
+        assert_eq!(alineas.len(), 2);
+        match &alineas[0] {
+            Subparagraph::List(lb) => {
+                assert!(lb.intro.contains("prohibited"));
+                assert_eq!(lb.items.len(), 2);
+                assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(a)"));
+                match &lb.items[1] {
+                    Subparagraph::List(inner) => {
+                        assert_eq!(inner.number.as_deref(), Some("(b)"));
+                        assert_eq!(inner.intro, "Practice B:");
+                        assert_eq!(inner.items.len(), 2);
+                        assert!(matches!(&inner.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(i)"));
+                        assert!(matches!(&inner.items[1], Subparagraph::Text { number: Some(n), .. } if n == "(ii)"));
+                    }
+                    _ => panic!("expected nested List for item (b)"),
+                }
             }
-            _ => panic!("expected ListItem at alineas[2]"),
+            _ => panic!("expected List at alineas[0]"),
         }
-        assert!(matches!(&alineas[3], ContentBlock::Paragraph(t) if t.contains("prejudice")));
+        assert!(matches!(&alineas[1], Subparagraph::Text { text: t, number: None } if t.contains("prejudice")));
     }
 
     #[test]
     fn alinea_list_expands_to_individual_alineas() {
-        // An <ALINEA> that contains a <P> intro and a <LIST> should yield one
-        // alinea for the intro and one per <ITEM>, not a single flattened string.
-        // This matches Article 3 of the EU AI Act (definitions).
+        // An <ALINEA> with a <P> intro and a <LIST> must produce a single
+        // Subparagraph::List with the intro set and items populated —
+        // matching Article 3 of the EU AI Act (definitions).
         let xml = r#"<ARTICLE>
             <TI.ART>Article 3</TI.ART>
             <STI.ART><P>Definitions</P></STI.ART>
@@ -498,12 +522,16 @@ mod tests {
         let art = parse_article(d.root_element()).unwrap();
         assert_eq!(art.paragraphs.len(), 1);
         let alineas = &art.paragraphs[0].alineas;
-        // intro + 2 list items = 3 alineas
-        assert_eq!(alineas.len(), 3);
-        assert!(matches!(&alineas[0], ContentBlock::Paragraph(t) if t == "For the purposes of this Regulation:"));
-        assert!(matches!(&alineas[1], ContentBlock::ListItem { number, text, .. }
-            if number == "(1)" && text == "first definition"));
-        assert!(matches!(&alineas[2], ContentBlock::ListItem { number, text, .. }
-            if number == "(2)" && text == "second definition"));
+        // Intro+list collapsed into a single List block.
+        assert_eq!(alineas.len(), 1);
+        match &alineas[0] {
+            Subparagraph::List(lb) => {
+                assert_eq!(lb.intro, "For the purposes of this Regulation:");
+                assert_eq!(lb.items.len(), 2);
+                assert!(matches!(&lb.items[0], Subparagraph::Text { text: t, number: Some(n) } if n == "(1)" && t == "first definition"));
+                assert!(matches!(&lb.items[1], Subparagraph::Text { text: t, number: Some(n) } if n == "(2)" && t == "second definition"));
+            }
+            _ => panic!("expected List at alineas[0]"),
+        }
     }
 }

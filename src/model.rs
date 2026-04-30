@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// A complete EU legislative act (regulation or directive) assembled from a
 /// Formex publication directory.
@@ -111,16 +111,51 @@ pub struct Article {
 /// Each paragraph consists of an optional number label followed by one or
 /// more alineas (text blocks). When an article has no `<PARAG>` wrappers its
 /// `<ALINEA>` children are grouped into a single paragraph with `number: None`.
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct Paragraph {
     /// Paragraph number, e.g. `"1."` (from `<NO.PARAG>`). `None` for articles
     /// that use bare `<ALINEA>` elements without a `<PARAG>` wrapper.
     pub number: Option<String>,
-    /// Content blocks of each `<ALINEA>` in this paragraph. A plain alinea
-    /// becomes a [`ContentBlock::Paragraph`]; an alinea that contains a
-    /// `<LIST>` expands into a mix of `Paragraph` (intro text) and
-    /// [`ContentBlock::ListItem`] entries.
-    pub alineas: Vec<ContentBlock>,
+    /// Subparagraphs of this paragraph. A plain alinea becomes a
+    /// [`Subparagraph::Text`]; an alinea that contains a `<LIST>` (with its
+    /// optional intro `<P>`) becomes a [`Subparagraph::List`].
+    pub alineas: Vec<Subparagraph>,
+}
+
+/// A content element within a [`Paragraph`].
+///
+/// Covers both plain text blocks and full list groups (intro + items).
+/// The recursive structure — `List` items are themselves `Vec<Subparagraph>` —
+/// handles nested lists without a separate sub-items field.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum Subparagraph {
+    /// Plain text, or a single numbered list item.
+    ///
+    /// `number` is `Some("(a)")` when this is a numbered entry in a list,
+    /// and absent for plain text blocks.
+    Text {
+        text: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        number: Option<String>,
+    },
+    /// A list group: optional item label (present when this list is itself a
+    /// numbered entry in a parent list), intro text, and the list items.
+    List(ListBlock),
+}
+
+/// A list: optional item label, intro text, and items.
+///
+/// `number` is `Some("(c)")` when this list is itself a numbered item inside a
+/// parent list; `None` for top-level lists.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct ListBlock {
+    /// Item label in a parent list, e.g. `"(c)"`. Omitted from JSON when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub number: Option<String>,
+    /// The text that introduces the list (may be empty).
+    pub intro: String,
+    /// The items of the list, each itself a [`Subparagraph`].
+    pub items: Vec<Subparagraph>,
 }
 
 /// A parsed annex file (`<ANNEX>`).

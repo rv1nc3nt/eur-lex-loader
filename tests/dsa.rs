@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_regulation;
-use eur_lex_loader::model::{ChapterContents, ContentBlock};
+use eur_lex_loader::model::{ChapterContents, Subparagraph};
 
 #[test]
 fn dsa_structure() {
@@ -76,34 +76,27 @@ fn dsa_structure() {
         "Article 1 para 1 should have 1 alinea block"
     );
     assert!(
-        matches!(&p1.alineas[0], ContentBlock::Paragraph(_)),
-        "Article 1 para 1 alineas[0] should be a Paragraph"
+        matches!(&p1.alineas[0], Subparagraph::Text { number: None, .. }),
+        "Article 1 para 1 alineas[0] should be a plain Text"
     );
 
-    // Para 2 (number "2."): 4 blocks — 1 Paragraph intro + 3 ListItems (a), (b), (c).
+    // Para 2 (number "2."): intro + 3 list items (a)(b)(c) grouped into one List.
     let p2 = &art1.paragraphs[1];
     assert_eq!(p2.number.as_deref(), Some("2."));
     assert_eq!(
         p2.alineas.len(),
-        4,
-        "Article 1 para 2 should have 1 intro + 3 list items"
+        1,
+        "Article 1 para 2 should be a single List block"
     );
-    assert!(
-        matches!(&p2.alineas[0], ContentBlock::Paragraph(_)),
-        "Article 1 para 2 alineas[0] should be a Paragraph (intro)"
-    );
-    assert!(
-        matches!(&p2.alineas[1], ContentBlock::ListItem { number, .. } if number == "(a)"),
-        "Article 1 para 2 alineas[1] should be ListItem (a)"
-    );
-    assert!(
-        matches!(&p2.alineas[2], ContentBlock::ListItem { number, .. } if number == "(b)"),
-        "Article 1 para 2 alineas[2] should be ListItem (b)"
-    );
-    assert!(
-        matches!(&p2.alineas[3], ContentBlock::ListItem { number, .. } if number == "(c)"),
-        "Article 1 para 2 alineas[3] should be ListItem (c)"
-    );
+    match &p2.alineas[0] {
+        Subparagraph::List(lb) => {
+            assert_eq!(lb.items.len(), 3, "para 2 list should have 3 items");
+            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(a)"));
+            assert!(matches!(&lb.items[1], Subparagraph::Text { number: Some(n), .. } if n == "(b)"));
+            assert!(matches!(&lb.items[2], Subparagraph::Text { number: Some(n), .. } if n == "(c)"));
+        }
+        _ => panic!("Article 1 para 2 alineas[0] should be a List"),
+    }
 
     // Article 3 ("Definitions", idx 2): bare <ALINEA> (no <PARAG> wrapper)
     // containing <P> + <LIST> with 24 items → 1 unnamed paragraph, 25 alinea blocks.
@@ -119,20 +112,15 @@ fn dsa_structure() {
     );
     assert_eq!(
         art3.paragraphs[0].alineas.len(),
-        25,
-        "Article 3 should have 1 intro Paragraph + 24 definition ListItems"
+        1,
+        "Article 3 should be a single List block (intro + 24 items)"
     );
-    assert!(
-        matches!(&art3.paragraphs[0].alineas[0], ContentBlock::Paragraph(_)),
-        "Article 3 first alinea should be a Paragraph (intro text)"
-    );
-    assert!(
-        matches!(
-            &art3.paragraphs[0].alineas[1],
-            ContentBlock::ListItem { .. }
-        ),
-        "Article 3 second alinea should be a ListItem"
-    );
+    match &art3.paragraphs[0].alineas[0] {
+        Subparagraph::List(lb) => {
+            assert_eq!(lb.items.len(), 24, "Article 3 list should have 24 definition items");
+        }
+        _ => panic!("Article 3 alineas[0] should be a List"),
+    }
 
     // Chapter II (idx 1): 7 direct articles.
     let ch2_arts = match &reg.enacting_terms.chapters[1].contents {

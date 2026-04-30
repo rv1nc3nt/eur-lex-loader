@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_regulation;
-use eur_lex_loader::model::{ChapterContents, ContentBlock};
+use eur_lex_loader::model::{ChapterContents, ContentBlock, ListBlock, Subparagraph};
 
 #[test]
 fn eu_ai_act_structure() {
@@ -36,7 +36,7 @@ fn eu_ai_act_structure() {
     }).sum();
     assert_eq!(total_articles, 113, "unexpected total article count");
 
-    // Article 3 (definitions): 1 intro alinea + 68 definition items = 69 alineas.
+    // Article 3 (definitions): intro + 68 items grouped into a single List block.
     let ch1_arts = match &reg.enacting_terms.chapters[0].contents {
         ChapterContents::Articles(arts) => arts,
         _ => panic!("Chapter I should have direct articles"),
@@ -45,17 +45,20 @@ fn eu_ai_act_structure() {
     assert_eq!(art3.number, "Article 3", "unexpected article at index 2 of Chapter I");
     assert_eq!(art3.paragraphs.len(), 1);
     assert_eq!(
-        art3.paragraphs[0].alineas.len(), 69,
-        "Article 3 should have 1 intro + 68 definition alineas"
+        art3.paragraphs[0].alineas.len(), 1,
+        "Article 3 should be a single List block"
     );
-    assert!(matches!(&art3.paragraphs[0].alineas[0], ContentBlock::Paragraph(_)),
-        "Article 3 first alinea should be a Paragraph (intro text)");
-    assert!(matches!(&art3.paragraphs[0].alineas[1], ContentBlock::ListItem { number, .. } if number == "(1)"),
-        "Article 3 second alinea should be ListItem (1)");
+    match &art3.paragraphs[0].alineas[0] {
+        Subparagraph::List(lb) => {
+            assert_eq!(lb.items.len(), 68, "Article 3 list should have 68 definition items");
+            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(1)"),
+                "first item should be numbered (1)");
+        }
+        _ => panic!("Article 3 alineas[0] should be a List"),
+    }
 
-    // Article 5, paragraph 1: alineas must contain ContentBlock::ListItem entries.
-    // Para 1 has: intro P + 8 list items (items (c) and (h) have sub-lists) = 9 blocks,
-    // plus one trailing plain alinea = 10 total.
+    // Article 5, paragraph 1: intro+list grouped into one List block, plus
+    // a trailing plain Text. Items (c) and (h) carry nested Lists.
     let ch2_arts = match &reg.enacting_terms.chapters[1].contents {
         ChapterContents::Articles(arts) => arts,
         _ => panic!("Chapter II should have direct articles"),
@@ -64,48 +67,49 @@ fn eu_ai_act_structure() {
     assert_eq!(ch1_art5.number, "Article 5", "unexpected article at index 0 of Chapter II");
     let para1 = &ch1_art5.paragraphs[0];
     assert_eq!(para1.number.as_deref(), Some("1."));
-    // 8 list items + 1 intro paragraph + 1 trailing plain alinea = 10
-    assert_eq!(para1.alineas.len(), 10, "Article 5 para 1 should have 10 alinea blocks");
-    // First block is the intro paragraph.
-    assert!(matches!(&para1.alineas[0], ContentBlock::Paragraph(_)),
-        "Article 5 para 1 alineas[0] should be a Paragraph");
-    // Items (a) through (h) are ListItems.
-    assert!(matches!(&para1.alineas[1], ContentBlock::ListItem { number, .. } if number == "(a)"));
-    // Item (c) has 2 sub-items.
-    match &para1.alineas[3] {
-        ContentBlock::ListItem { number, sub_items, .. } => {
-            assert_eq!(number, "(c)");
-            assert_eq!(sub_items.len(), 2, "Article 5 item (c) should have 2 sub-items");
+    // 1 List block + 1 trailing plain Text = 2
+    assert_eq!(para1.alineas.len(), 2, "Article 5 para 1 should have 2 alinea blocks");
+    assert!(matches!(&para1.alineas[1], Subparagraph::Text { number: None, .. }),
+        "Article 5 para 1 alineas[1] should be trailing plain Text");
+    match &para1.alineas[0] {
+        Subparagraph::List(lb) => {
+            assert_eq!(lb.items.len(), 8, "Article 5 list should have 8 items");
+            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(a)"));
+            // Item (c) has 2 sub-items.
+            match &lb.items[2] {
+                Subparagraph::List(ListBlock { number, items, .. }) => {
+                    assert_eq!(number.as_deref(), Some("(c)"));
+                    assert_eq!(items.len(), 2, "Article 5 item (c) should have 2 sub-items");
+                }
+                _ => panic!("Article 5 items[2] should be a nested List for (c)"),
+            }
+            // Item (h) has 3 sub-items.
+            match &lb.items[7] {
+                Subparagraph::List(ListBlock { number, items, .. }) => {
+                    assert_eq!(number.as_deref(), Some("(h)"));
+                    assert_eq!(items.len(), 3, "Article 5 item (h) should have 3 sub-items");
+                }
+                _ => panic!("Article 5 items[7] should be a nested List for (h)"),
+            }
         }
-        _ => panic!("Article 5 para 1 alineas[3] should be a ListItem"),
+        _ => panic!("Article 5 para 1 alineas[0] should be a List"),
     }
-    // Item (h) has 3 sub-items.
-    match &para1.alineas[8] {
-        ContentBlock::ListItem { number, sub_items, .. } => {
-            assert_eq!(number, "(h)");
-            assert_eq!(sub_items.len(), 3, "Article 5 item (h) should have 3 sub-items");
-        }
-        _ => panic!("Article 5 para 1 alineas[8] should be a ListItem"),
-    }
-    // Last block is the trailing plain alinea.
-    assert!(matches!(&para1.alineas[9], ContentBlock::Paragraph(_)),
-        "Article 5 para 1 alineas[9] should be a Paragraph");
 
     // Annex III (index 2): list wrapped in a <P> must expand to 8 ListItems.
     let annex_iii = &reg.annexes[2];
     assert!(annex_iii.number.contains("III"), "expected ANNEX III at index 2");
     let iii_items: Vec<_> = annex_iii.content_blocks.iter()
-        .filter(|b| matches!(b, eur_lex_loader::model::ContentBlock::ListItem { .. }))
+        .filter(|b| matches!(b, ContentBlock::ListItem { .. }))
         .collect();
     assert_eq!(iii_items.len(), 8, "Annex III should have 8 high-risk category items");
     // Item 1 (Biometrics) has 3 alpha sub-items; item 2 (Critical infrastructure) has none.
     match &annex_iii.content_blocks[1] {
-        eur_lex_loader::model::ContentBlock::ListItem { sub_items, .. } =>
+        ContentBlock::ListItem { sub_items, .. } =>
             assert_eq!(sub_items.len(), 3, "Annex III item 1 should have 3 sub-items"),
         _ => panic!("expected ListItem at index 1 of Annex III"),
     }
     match &annex_iii.content_blocks[2] {
-        eur_lex_loader::model::ContentBlock::ListItem { sub_items, .. } =>
+        ContentBlock::ListItem { sub_items, .. } =>
             assert!(sub_items.is_empty(), "Annex III item 2 should have no sub-items"),
         _ => panic!("expected ListItem at index 2 of Annex III"),
     }
@@ -114,7 +118,7 @@ fn eu_ai_act_structure() {
     let annex_iv = &reg.annexes[3];
     assert!(annex_iv.number.contains("IV"), "expected ANNEX IV at index 3");
     let empty_items: Vec<_> = annex_iv.content_blocks.iter().filter(|b| {
-        matches!(b, eur_lex_loader::model::ContentBlock::ListItem { text, .. } if text.is_empty())
+        matches!(b, ContentBlock::ListItem { text, .. } if text.is_empty())
     }).collect();
     assert!(empty_items.is_empty(), "Annex IV has {} ListItem(s) with empty text", empty_items.len());
 

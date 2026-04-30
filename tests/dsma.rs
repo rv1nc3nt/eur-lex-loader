@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_regulation;
-use eur_lex_loader::model::{ChapterContents, ContentBlock};
+use eur_lex_loader::model::{ChapterContents, Subparagraph};
 
 #[test]
 fn dsma_structure() {
@@ -54,10 +54,10 @@ fn dsma_structure() {
     assert_eq!(art1.paragraphs.len(), 2);
     assert_eq!(art1.paragraphs[0].number.as_deref(), Some("1."));
     assert_eq!(art1.paragraphs[0].alineas.len(), 1);
-    assert!(matches!(&art1.paragraphs[0].alineas[0], ContentBlock::Paragraph(_)));
+    assert!(matches!(&art1.paragraphs[0].alineas[0], Subparagraph::Text { number: None, .. }));
 
-    // Article 2 ("Definitions"): bare <ALINEA> with <P> + <LIST> (6 items)
-    // → 1 unnamed paragraph with 7 alinea blocks.
+    // Article 2 ("Definitions"): bare <ALINEA> with <P> intro + <LIST> (6 items)
+    // → 1 unnamed paragraph with a single List block.
     let art2 = &title1_arts[1];
     assert_eq!(art2.number, "Article 2");
     assert_eq!(art2.title.as_deref(), Some("Definitions"));
@@ -65,11 +65,13 @@ fn dsma_structure() {
     assert!(art2.paragraphs[0].number.is_none(),
         "Article 2 bare-alinea paragraph should have no number");
     assert_eq!(
-        art2.paragraphs[0].alineas.len(), 7,
-        "Article 2 should have 1 intro Paragraph + 6 definition ListItems"
+        art2.paragraphs[0].alineas.len(), 1,
+        "Article 2 should be a single List block"
     );
-    assert!(matches!(&art2.paragraphs[0].alineas[0], ContentBlock::Paragraph(_)));
-    assert!(matches!(&art2.paragraphs[0].alineas[1], ContentBlock::ListItem { .. }));
+    match &art2.paragraphs[0].alineas[0] {
+        Subparagraph::List(lb) => assert_eq!(lb.items.len(), 6),
+        _ => panic!("Article 2 alineas[0] should be a List"),
+    }
 
     // Title II (idx 1): 5 direct articles.
     let title2_arts = match &reg.enacting_terms.chapters[1].contents {
@@ -83,10 +85,15 @@ fn dsma_structure() {
     assert_eq!(art5.number, "Article 5");
     let p1 = &art5.paragraphs[0];
     assert_eq!(p1.number.as_deref(), Some("1."));
-    assert_eq!(p1.alineas.len(), 3, "Article 5 para 1 should have 1 intro + 2 list items");
-    assert!(matches!(&p1.alineas[0], ContentBlock::Paragraph(_)));
-    assert!(matches!(&p1.alineas[1], ContentBlock::ListItem { number, .. } if number == "(a)"));
-    assert!(matches!(&p1.alineas[2], ContentBlock::ListItem { number, .. } if number == "(b)"));
+    assert_eq!(p1.alineas.len(), 1, "Article 5 para 1 should be a single List block");
+    match &p1.alineas[0] {
+        Subparagraph::List(lb) => {
+            assert_eq!(lb.items.len(), 2);
+            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(a)"));
+            assert!(matches!(&lb.items[1], Subparagraph::Text { number: Some(n), .. } if n == "(b)"));
+        }
+        _ => panic!("Article 5 para 1 alineas[0] should be a List"),
+    }
 
     // Title III (idx 2): 4 sections (chapters), 7 articles total.
     let title3_secs = match &reg.enacting_terms.chapters[2].contents {

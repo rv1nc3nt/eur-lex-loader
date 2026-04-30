@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_regulation;
-use eur_lex_loader::model::{ChapterContents, ContentBlock};
+use eur_lex_loader::model::{ChapterContents, ContentBlock, Subparagraph};
 
 #[test]
 fn trademark_act_structure() {
@@ -62,16 +62,16 @@ fn trademark_act_structure() {
     assert_eq!(art1.paragraphs.len(), 2);
     assert_eq!(art1.paragraphs[0].number.as_deref(), Some("1."));
     assert_eq!(art1.paragraphs[0].alineas.len(), 1);
-    assert!(matches!(&art1.paragraphs[0].alineas[0], ContentBlock::Paragraph(_)));
+    assert!(matches!(&art1.paragraphs[0].alineas[0], Subparagraph::Text { number: None, .. }));
 
     // Article 3 ("Capacity to act"): bare <ALINEA> (plain text, no block children)
-    // → 1 unnamed paragraph with 1 Paragraph block.
+    // → 1 unnamed paragraph with 1 plain Text block.
     let art3 = &ch1_arts[2];
     assert_eq!(art3.number, "Article 3");
     assert_eq!(art3.paragraphs.len(), 1);
     assert!(art3.paragraphs[0].number.is_none(), "bare-alinea paragraph should have no number");
     assert_eq!(art3.paragraphs[0].alineas.len(), 1);
-    assert!(matches!(&art3.paragraphs[0].alineas[0], ContentBlock::Paragraph(_)));
+    assert!(matches!(&art3.paragraphs[0].alineas[0], Subparagraph::Text { number: None, .. }));
 
     // Chapter II (idx 1): 4 sections.
     let ch2_secs = match &reg.enacting_terms.chapters[1].contents {
@@ -90,9 +90,14 @@ fn trademark_act_structure() {
     assert_eq!(art7.title.as_deref(), Some("Absolute grounds for refusal"));
     let p1 = &art7.paragraphs[0];
     assert_eq!(p1.number.as_deref(), Some("1."));
-    assert_eq!(p1.alineas.len(), 14, "Article 7 para 1 should have 1 intro + 13 list items");
-    assert!(matches!(&p1.alineas[0], ContentBlock::Paragraph(_)));
-    assert!(matches!(&p1.alineas[1], ContentBlock::ListItem { number, .. } if number == "(a)"));
+    assert_eq!(p1.alineas.len(), 1, "Article 7 para 1 should be a single List block");
+    match &p1.alineas[0] {
+        Subparagraph::List(lb) => {
+            assert_eq!(lb.items.len(), 13, "Article 7 para 1 list should have 13 items");
+            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(a)"));
+        }
+        _ => panic!("Article 7 para 1 alineas[0] should be a List"),
+    }
 
     // Chapter V (idx 4): 5 direct articles.
     let ch5_arts = match &reg.enacting_terms.chapters[4].contents {
