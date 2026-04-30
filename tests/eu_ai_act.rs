@@ -132,4 +132,11 @@ fn eu_ai_act_structure() {
             annex.number
         );
     }
+
+    // Definitions: Article 3 has 68 items, all extracted into the map.
+    assert_eq!(reg.definitions.len(), 68, "EU AI Act should have 68 definitions");
+    assert!(
+        reg.definitions.contains_key("AI system"),
+        "definitions should contain 'AI system'"
+    );
 }

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize}; // Deserialize needed for Subparagraph/ListBlock in tests
 
 /// A complete EU legislative act (regulation or directive) assembled from a
@@ -17,6 +19,14 @@ pub struct Act {
     pub enacting_terms: EnactingTerms,
     /// The annexes, in the order declared by the `.doc.fmx.xml` registry.
     pub annexes: Vec<Annex>,
+    /// Definitions extracted from any "Definitions" article in the enacting terms.
+    ///
+    /// Key: defined term (e.g. `"AI system"`).
+    /// Value: full definition text as it appears in the act
+    /// (e.g. `"\u{201C}AI system\u{201D} means …"`).
+    /// Omitted from JSON when the act has no Definitions article.
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub definitions: HashMap<String, String>,
 }
 
 /// The preamble of an act (`<PREAMBLE>`).

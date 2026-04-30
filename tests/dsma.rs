@@ -121,4 +121,11 @@ fn dsma_structure() {
         _ => panic!("Title V should have direct articles"),
     };
     assert_eq!(title5_arts.len(), 9, "Title V should have 9 articles");
+
+    // Definitions: Article 2 has 6 items, including one with sub-items.
+    assert_eq!(reg.definitions.len(), 6, "DSMA should have 6 definitions");
+    assert!(
+        reg.definitions.contains_key("press publication"),
+        "definitions should contain 'press publication'"
+    );
 }

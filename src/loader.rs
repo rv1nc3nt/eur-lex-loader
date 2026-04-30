@@ -3,8 +3,10 @@ use std::path::Path;
 
 use roxmltree::Document;
 
+use std::collections::HashMap;
+
 use crate::error::Error;
-use crate::model::Act;
+use crate::model::{Act, ChapterContents, ListBlock, Subparagraph};
 use crate::parser::{parse_act, parse_annex};
 
 /// Loads a complete act from a directory of Formex `.fmx.xml` files.
@@ -34,7 +36,70 @@ pub fn load_act(data_dir: &Path) -> Result<Act, Error> {
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(Act { title, preamble, enacting_terms, annexes })
+    let definitions = extract_definitions(&enacting_terms);
+    Ok(Act { title, preamble, enacting_terms, annexes, definitions })
+}
+
+/// Traverses `enacting_terms` to find all articles whose title contains
+/// "Definitions" and extracts a term → definition-text map from their list items.
+fn extract_definitions(enacting_terms: &crate::model::EnactingTerms) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    let articles = enacting_terms.chapters.iter().flat_map(|ch| match &ch.contents {
+        ChapterContents::Articles(arts) => arts.iter().collect::<Vec<_>>(),
+        ChapterContents::Sections(secs) => {
+            secs.iter().flat_map(|s| s.articles.iter()).collect()
+        }
+    });
+    for article in articles {
+        let is_definitions = article.title.as_deref()
+            .map(|t| t.contains("Definitions"))
+            .unwrap_or(false);
+        if !is_definitions {
+            continue;
+        }
+        for para in &article.paragraphs {
+            for alinea in &para.alineas {
+                collect_definition_items(alinea, &mut map);
+            }
+        }
+    }
+    map
+}
+
+/// Recursively visits a [`Subparagraph`] and inserts any definition it finds
+/// into `map`. A definition is recognised by a leading `\u{201C}term\u{201D}`
+/// pair produced by Formex `<QUOT.START>` / `<QUOT.END>` markers.
+fn collect_definition_items(sub: &Subparagraph, map: &mut HashMap<String, String>) {
+    match sub {
+        Subparagraph::List(ListBlock { intro, items, .. }) => {
+            // Items with sub-lists carry their definition in the intro text.
+            if let Some(term) = extract_term(intro) {
+                map.insert(term.to_owned(), intro.clone());
+            }
+            for item in items {
+                collect_definition_items(item, map);
+            }
+        }
+        Subparagraph::Text { text, .. } => {
+            if let Some(term) = extract_term(text) {
+                map.insert(term.to_owned(), text.clone());
+            }
+        }
+        Subparagraph::Section { items, .. } => {
+            for item in items {
+                collect_definition_items(item, map);
+            }
+        }
+    }
+}
+
+/// Returns the defined term from a definition text, i.e. the substring between
+/// the first `\u{201C}` (left double quotation mark) and the first `\u{201D}`
+/// (right double quotation mark). Returns `None` if no such pair exists.
+fn extract_term(text: &str) -> Option<&str> {
+    let start = text.find('\u{201C}')? + '\u{201C}'.len_utf8();
+    let end = text[start..].find('\u{201D}')?;
+    Some(&text[start..start + end])
 }
 
 /// Scans `data_dir` for the `*.doc.fmx.xml` or `*.doc.xml` registry file.
@@ -101,4 +166,25 @@ fn read_file(path: &Path) -> Result<String, Error> {
         path: path.display().to_string(),
         source: e,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_term;
+
+    #[test]
+    fn extract_term_basic() {
+        let text = "\u{201C}AI system\u{201D} means a machine-based system";
+        assert_eq!(extract_term(text), Some("AI system"));
+    }
+
+    #[test]
+    fn extract_term_no_quotes_returns_none() {
+        assert_eq!(extract_term("plain text without quotes"), None);
+    }
+
+    #[test]
+    fn extract_term_only_opening_quote_returns_none() {
+        assert_eq!(extract_term("\u{201C}unclosed term"), None);
+    }
 }

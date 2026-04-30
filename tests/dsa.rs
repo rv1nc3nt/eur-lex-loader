@@ -168,4 +168,11 @@ fn dsa_structure() {
         _ => panic!("Chapter V should have direct articles"),
     };
     assert_eq!(ch5_arts.len(), 5, "Chapter V should have 5 articles");
+
+    // Definitions: Article 3 has 27 items.
+    assert_eq!(reg.definitions.len(), 27, "DSA should have 27 definitions");
+    assert!(
+        reg.definitions.contains_key("intermediary service"),
+        "definitions should contain 'intermediary service'"
+    );
 }

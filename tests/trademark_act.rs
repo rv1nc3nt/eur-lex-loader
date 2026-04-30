@@ -118,4 +118,7 @@ fn trademark_act_structure() {
         matches!(&reg.annexes[0].content_blocks[0], Subparagraph::Section { .. }),
         "Annex I content should start with a Section (GR.SEQ)"
     );
+
+    // No Definitions article → definitions map is empty.
+    assert!(reg.definitions.is_empty(), "TrademarkAct should have no definitions");
 }
