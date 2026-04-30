@@ -1,4 +1,4 @@
-# euro-lex-loader
+# eur-lex-loader
 
 A Rust library and command-line tool for parsing EU regulations published in
 [Formex 4](https://op.europa.eu/en/web/eu-vocabularies/formex) XML format and
@@ -82,14 +82,14 @@ The directory will contain several `.fmx.xml` files:
 cargo build --release
 ```
 
-The compiled binary is at `target/release/euro-lex-loader`.
+The compiled binary is at `target/release/eur_lex_loader`.
 
 ---
 
 ## Usage
 
 ```
-euro-lex-loader [OPTIONS] [DIR]
+eur_lex_loader [OPTIONS] [DIR]
 
 Arguments:
   [DIR]  Path to a local Formex regulation directory
@@ -108,19 +108,19 @@ Options:
 
 ```bash
 # Fetch the DSA directly from EUR-Lex and pretty-print to stdout
-euro-lex-loader -c 32022R2065
+eur_lex_loader -c 32022R2065
 
 # Fetch the EU AI Act and write compact JSON to a file
-euro-lex-loader -c 32024R1689 --compact --output ai_act.json
+eur_lex_loader -c 32024R1689 --compact --output ai_act.json
 
 # Parse a previously downloaded regulation
-euro-lex-loader data/MY_REGULATION
+eur_lex_loader data/MY_REGULATION
 
 # Write compact JSON to a file
-euro-lex-loader data/MY_REGULATION --compact --output regulation.json
+eur_lex_loader data/MY_REGULATION --compact --output regulation.json
 
 # Pipe pretty-printed JSON into jq
-euro-lex-loader data/MY_REGULATION | jq '.preamble.recitals | length'
+eur_lex_loader data/MY_REGULATION | jq '.preamble.recitals | length'
 ```
 
 ---
@@ -198,14 +198,14 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-euro-lex-loader = { path = "…" }
+eur-lex-loader = { path = "…" }
 ```
 
 ```rust
-use euro_lex_loader::loader::load_regulation;
+use eur_lex_loader::loader::load_regulation;
 use std::path::Path;
 
-fn main() -> Result<(), euro_lex_loader::error::Error> {
+fn main() -> Result<(), eur_lex_loader::error::Error> {
     let reg = load_regulation(Path::new("data/MY_REGULATION"))?;
     println!("Title: {}", reg.title);
     println!("Recitals: {}", reg.preamble.recitals.len());
