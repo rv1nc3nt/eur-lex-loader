@@ -21,6 +21,9 @@
 //! for chapter in &act.enacting_terms.chapters {
 //!     println!("{}", chapter.title);
 //! }
+//! if let Some(def) = act.definitions.get("AI system") {
+//!     println!("{def}");
+//! }
 //! ```
 //!
 //! The companion binary (`eur-lex-loader`) wraps this function and adds a
@@ -33,7 +36,9 @@
 //! 3. Parse the act file into a title, [`model::Preamble`], and
 //!    [`model::EnactingTerms`].
 //! 4. Parse each annex file into an [`model::Annex`].
-//! 5. Assemble everything into an [`Act`].
+//! 5. Extract definitions from any article titled "Definitions" into a
+//!    [`std::collections::HashMap`].
+//! 6. Assemble everything into an [`Act`].
 
 /// Error types for loading and parsing Formex acts.
 pub mod error;

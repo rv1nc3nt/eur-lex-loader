@@ -6,7 +6,8 @@ XML format and converting them to JSON.
 
 The library extracts the full document structure: title, preamble (legal bases
 and recitals), enacting terms (chapters, sections, and articles with nested
-lists), and annexes.
+lists), annexes, and a flat definitions map when the act contains a Definitions
+article.
 
 ---
 
@@ -93,7 +94,7 @@ The compiled binary is at `target/release/eur_lex_loader`.
 eur_lex_loader [OPTIONS] [DIR]
 
 Arguments:
-  [DIR]  Path to a local Formex regulation directory
+  [DIR]  Path to a local Formex act directory
 
 Options:
   -c, --celex <CELEX>  Fetch from EUR-Lex Cellar by CELEX number (e.g. 32022R2065)
@@ -195,11 +196,21 @@ The tool outputs a single JSON object with the following shape:
         { "Section": { "title": "Part A", "items": [ "…" ] } }
       ]
     }
-  ]
+  ],
+
+  // Present only when the act contains a Definitions article.
+  // Key: defined term. Value: full definition text as it appears in the act,
+  // including the term in curly quotes (e.g. "AI system" means …).
+  "definitions": {
+    "AI system": "\u201CAI system\u201D means a machine-based system …",
+    "high-risk AI system": "\u201Chigh-risk AI system\u201D means …",
+    "…": "…"
+  }
 }
 ```
 
-`number` is omitted from the JSON when absent (plain text blocks and top-level lists).
+`number` is omitted from the JSON when absent (plain text blocks and top-level
+lists). `definitions` is omitted when the act has no Definitions article.
 
 ---
 
@@ -220,6 +231,9 @@ fn main() -> Result<(), eur_lex_loader::error::Error> {
     let act = load_act(Path::new("data/MY_REGULATION"))?;
     println!("Title: {}", act.title);
     println!("Recitals: {}", act.preamble.recitals.len());
+    if let Some(def) = act.definitions.get("AI system") {
+        println!("AI system: {def}");
+    }
     Ok(())
 }
 ```
@@ -237,12 +251,12 @@ cargo test
 Unit tests live alongside their source modules. Integration tests validate the
 full parse of four different EU legislative acts against known structural counts:
 
-| File | Act | Articles | Recitals |
-|---|---|---|---|
-| `tests/eu_ai_act.rs` | EU AI Act (32024R1689) | 113 | 180 |
-| `tests/dsa.rs` | Digital Services Act (32022R2065) | 93 | 156 |
-| `tests/dsma.rs` | Copyright in the Digital Single Market (32019L0790) | 32 | 86 |
-| `tests/trademark_act.rs` | EU Trade Mark Regulation (32017R1001) | 212 | 48 |
+| File | Act | Articles | Recitals | Definitions |
+|---|---|---|---|---|
+| `tests/eu_ai_act.rs` | EU AI Act (32024R1689) | 113 | 180 | 68 |
+| `tests/dsa.rs` | Digital Services Act (32022R2065) | 93 | 156 | 27 |
+| `tests/dsma.rs` | Copyright in the Digital Single Market (32019L0790) | 32 | 86 | 6 |
+| `tests/trademark_act.rs` | EU Trade Mark Regulation (32017R1001) | 212 | 48 | — |
 
 ---
 
