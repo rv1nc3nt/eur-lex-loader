@@ -10,8 +10,8 @@ use super::{child, parse_block_children};
 /// Annex content is heterogeneous: some annexes use plain paragraphs (`<P>`),
 /// others use numbered entries (`<NP>` or `<LIST>`), and some group content
 /// under titled `<GR.SEQ>` sub-sections. All variants are mapped to
-/// [`Subparagraph`] variants via [`parse_block_children`], the same logic used
-/// for article alineas.
+/// [`Subparagraph`] variants via the shared `parse_block_children` utility,
+/// the same logic used for article alineas.
 ///
 /// # Errors
 ///
