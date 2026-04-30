@@ -158,13 +158,20 @@ The tool outputs a single JSON object with the following shape:
                 {
                   "number": "1.",
                   "alineas": [
-                    { "Paragraph": "The purpose of this Regulation …" },
-                    { "ListItem": { "number": "(a)", "text": "…" } },
-                    // Items with nested lists carry sub_items:
-                    { "ListItem": { "number": "(b)", "text": "…",
-                                    "sub_items": [
-                                      { "ListItem": { "number": "(i)", "text": "…" } }
-                                    ] } }
+                    // A plain paragraph:
+                    { "Text": { "text": "The purpose of this Regulation …" } },
+                    // A <P> intro + <LIST> collapsed into a single List block:
+                    { "List": {
+                        "intro": "The following practices shall be prohibited:",
+                        "items": [
+                          { "Text": { "text": "…", "number": "(a)" } },
+                          // An item that itself has a nested list:
+                          { "List": { "number": "(b)", "intro": "…",
+                                      "items": [
+                                        { "Text": { "text": "…", "number": "(i)" } }
+                                      ] } }
+                        ]
+                    } }
                   ]
                 }
               ]
@@ -180,15 +187,18 @@ The tool outputs a single JSON object with the following shape:
       "number": "ANNEX I",
       "subtitle": "List of harmonised standards …",
       "content_blocks": [
-        { "Paragraph": "…" },
-        { "ListItem": { "number": "1.", "text": "…" } }
+        { "Text": { "text": "…" } },
+        { "List": { "intro": "", "items": [
+            { "Text": { "text": "…", "number": "1." } }
+        ] } },
+        { "Section": { "title": "Part A", "items": [ "…" ] } }
       ]
     }
   ]
 }
 ```
 
-`sub_items` is omitted from the JSON when empty.
+`number` is omitted from the JSON when absent (plain text blocks and top-level lists).
 
 ---
 
