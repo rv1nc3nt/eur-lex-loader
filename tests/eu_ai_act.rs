@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_regulation;
-use eur_lex_loader::model::{ChapterContents, ContentBlock, ListBlock, Subparagraph};
+use eur_lex_loader::model::{ChapterContents, ListBlock, Subparagraph};
 
 #[test]
 fn eu_ai_act_structure() {
@@ -95,32 +95,33 @@ fn eu_ai_act_structure() {
         _ => panic!("Article 5 para 1 alineas[0] should be a List"),
     }
 
-    // Annex III (index 2): list wrapped in a <P> must expand to 8 ListItems.
+    // Annex III (index 2): list wrapped in a <P> produces a single List block with 8 items.
     let annex_iii = &reg.annexes[2];
     assert!(annex_iii.number.contains("III"), "expected ANNEX III at index 2");
-    let iii_items: Vec<_> = annex_iii.content_blocks.iter()
-        .filter(|b| matches!(b, ContentBlock::ListItem { .. }))
-        .collect();
-    assert_eq!(iii_items.len(), 8, "Annex III should have 8 high-risk category items");
-    // Item 1 (Biometrics) has 3 alpha sub-items; item 2 (Critical infrastructure) has none.
-    match &annex_iii.content_blocks[1] {
-        ContentBlock::ListItem { sub_items, .. } =>
-            assert_eq!(sub_items.len(), 3, "Annex III item 1 should have 3 sub-items"),
-        _ => panic!("expected ListItem at index 1 of Annex III"),
+    let iii_list = annex_iii.content_blocks.iter()
+        .find_map(|b| if let Subparagraph::List(lb) = b { Some(lb) } else { None })
+        .expect("Annex III should contain a List block");
+    assert_eq!(iii_list.items.len(), 8, "Annex III should have 8 high-risk category items");
+    // Item 0 (Biometrics) has 3 alpha sub-items.
+    match &iii_list.items[0] {
+        Subparagraph::List(inner) =>
+            assert_eq!(inner.items.len(), 3, "Annex III item 1 should have 3 sub-items"),
+        _ => panic!("expected nested List for Annex III item 1"),
     }
-    match &annex_iii.content_blocks[2] {
-        ContentBlock::ListItem { sub_items, .. } =>
-            assert!(sub_items.is_empty(), "Annex III item 2 should have no sub-items"),
-        _ => panic!("expected ListItem at index 2 of Annex III"),
-    }
+    // Item 1 (Critical infrastructure) has no sub-items.
+    assert!(matches!(&iii_list.items[1], Subparagraph::Text { .. }),
+        "Annex III item 2 should be a plain Text (no sub-items)");
 
     // Annex IV (index 3): list items use <NP> wrappers and must not have empty text.
     let annex_iv = &reg.annexes[3];
     assert!(annex_iv.number.contains("IV"), "expected ANNEX IV at index 3");
-    let empty_items: Vec<_> = annex_iv.content_blocks.iter().filter(|b| {
-        matches!(b, ContentBlock::ListItem { text, .. } if text.is_empty())
-    }).collect();
-    assert!(empty_items.is_empty(), "Annex IV has {} ListItem(s) with empty text", empty_items.len());
+    let iv_list = annex_iv.content_blocks.iter()
+        .find_map(|b| if let Subparagraph::List(lb) = b { Some(lb) } else { None })
+        .expect("Annex IV should contain a List block");
+    let empty_items: Vec<_> = iv_list.items.iter()
+        .filter(|item| matches!(item, Subparagraph::Text { text, .. } if text.is_empty()))
+        .collect();
+    assert!(empty_items.is_empty(), "Annex IV has {} list item(s) with empty text", empty_items.len());
 
     // Annexes: 13 files, all identified as ANNEX something.
     assert_eq!(reg.annexes.len(), 13, "unexpected annex count");

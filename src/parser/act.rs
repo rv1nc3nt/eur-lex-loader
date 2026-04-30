@@ -3,7 +3,7 @@ use roxmltree::{Document, Node};
 use crate::error::Error;
 use crate::model::*;
 use crate::text::extract_text;
-use super::{child, parse_list_as_subparagraphs};
+use super::{child, parse_block_children};
 
 /// Parses a Formex main-act XML string (`<ACT>` root) into its three parts.
 ///
@@ -229,63 +229,8 @@ fn parse_paragraph(node: Node) -> Result<Paragraph, Error> {
 }
 
 /// Expands a single `<ALINEA>` element into one or more [`Subparagraph`]s.
-///
-/// - A `<P>` immediately followed by a `<LIST>` is grouped into a single
-///   [`Subparagraph::List`] with the `<P>` text as the intro.
-/// - A `<P>` with no following `<LIST>` becomes [`Subparagraph::Text`]`(text, None)`.
-/// - A standalone `<LIST>` (no preceding `<P>`) becomes a `List` with an empty intro.
-/// - Falls back to a single `Text` when the alinea has no block children
-///   (pure inline text, `<HT>`, `<QUOT.START>`, etc.).
 fn expand_alinea(node: Node) -> Vec<Subparagraph> {
-    let mut result: Vec<Subparagraph> = Vec::new();
-    let mut pending: Option<String> = None;
-
-    for child in node.children().filter(|n| n.is_element()) {
-        match child.tag_name().name() {
-            "P" => {
-                // Flush any previous pending text as a plain Text block.
-                if let Some(t) = pending.take() {
-                    result.push(Subparagraph::Text { text: t, number: None });
-                }
-                let t = extract_text(child);
-                if !t.is_empty() {
-                    pending = Some(t);
-                }
-            }
-            "LIST" => {
-                let intro = pending.take().unwrap_or_default();
-                result.push(Subparagraph::List(ListBlock {
-                    number: None,
-                    intro,
-                    items: parse_list_as_subparagraphs(child),
-                }));
-            }
-            _ => {
-                // Unrecognised block elements (e.g. <TABLE>, <FORMULA>) are
-                // reduced to their text content. Structure is lost but no text
-                // is silently dropped.
-                if let Some(t) = pending.take() {
-                    result.push(Subparagraph::Text { text: t, number: None });
-                }
-                let t = extract_text(child);
-                if !t.is_empty() {
-                    pending = Some(t);
-                }
-            }
-        }
-    }
-    // Flush any trailing <P> not followed by a <LIST>.
-    if let Some(t) = pending {
-        result.push(Subparagraph::Text { text: t, number: None });
-    }
-    // Pure inline alinea — wrap the whole text as a single Text block.
-    if result.is_empty() {
-        let t = extract_text(node);
-        if !t.is_empty() {
-            result.push(Subparagraph::Text { text: t, number: None });
-        }
-    }
-    result
+    parse_block_children(node)
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize}; // Deserialize needed for Subparagraph/ListBlock in tests
 
 /// A complete EU legislative act (regulation or directive) assembled from a
 /// Formex publication directory.
@@ -122,11 +122,11 @@ pub struct Paragraph {
     pub alineas: Vec<Subparagraph>,
 }
 
-/// A content element within a [`Paragraph`].
+/// A content element within a [`Paragraph`] or an [`Annex`].
 ///
-/// Covers both plain text blocks and full list groups (intro + items).
-/// The recursive structure — `List` items are themselves `Vec<Subparagraph>` —
-/// handles nested lists without a separate sub-items field.
+/// Covers plain text, full list groups (intro + items), and titled sections
+/// (`<GR.SEQ>`). The recursive structure — `List` and `Section` items are
+/// themselves `Vec<Subparagraph>` — handles nesting without separate fields.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Subparagraph {
     /// Plain text, or a single numbered list item.
@@ -141,6 +141,13 @@ pub enum Subparagraph {
     /// A list group: optional item label (present when this list is itself a
     /// numbered entry in a parent list), intro text, and the list items.
     List(ListBlock),
+    /// A titled section (`<GR.SEQ>`), grouping related content under a heading.
+    Section {
+        /// Section heading (from `<TITLE><TI>`).
+        title: String,
+        /// Content items nested inside this section.
+        items: Vec<Subparagraph>,
+    },
 }
 
 /// A list: optional item label, intro text, and items.
@@ -165,33 +172,7 @@ pub struct Annex {
     pub number: String,
     /// Optional descriptive subtitle (from `<TITLE><STI>`); present only in some annexes.
     pub subtitle: Option<String>,
-    /// Top-level content blocks from `<CONTENTS>`: a heterogeneous mix of
-    /// [`ContentBlock::Paragraph`], [`ContentBlock::ListItem`], and
-    /// [`ContentBlock::Section`] entries depending on the annex structure.
-    pub content_blocks: Vec<ContentBlock>,
-}
-
-/// A content element inside an annex `<CONTENTS>` block.
-///
-/// Annexes are heterogeneous: some use plain paragraphs, others use numbered
-/// lists, and some group content under `<GR.SEQ>` section headings.
-#[derive(Serialize)]
-pub enum ContentBlock {
-    /// Plain text extracted from a `<P>` element.
-    Paragraph(String),
-    /// A numbered list entry (`<ITEM>` inside `<LIST>`, or `<NP>`).
-    /// `sub_items` holds any nested `<LIST>` entries; omitted from JSON when empty.
-    ListItem {
-        number: String,
-        text: String,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        sub_items: Vec<ContentBlock>,
-    },
-    /// A grouped section with its own title (`<GR.SEQ>`).
-    Section {
-        /// Section heading (from the `<TITLE>` child of `<GR.SEQ>`).
-        title: String,
-        /// Content blocks nested inside this section.
-        blocks: Vec<ContentBlock>,
-    },
+    /// Top-level content from `<CONTENTS>`: the same [`Subparagraph`] type used
+    /// in article paragraphs, covering plain text, lists, and titled sections.
+    pub content_blocks: Vec<Subparagraph>,
 }
