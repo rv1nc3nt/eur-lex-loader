@@ -188,13 +188,27 @@ The tool outputs a single JSON object with the following shape:
     {
       "number": "ANNEX I",
       "subtitle": "List of harmonised standards …",
-      "content_blocks": [
-        { "Text": { "text": "…" } },
-        { "List": { "intro": "", "items": [
-            { "Text": { "text": "…", "number": "1." } }
-        ] } },
-        { "Section": { "title": "Part A", "items": [ "…" ] } }
-      ]
+      // Annexes with titled GR.SEQ sub-divisions use Sections:
+      "content": {
+        "Sections": [
+          {
+            "title": "Part A",
+            "alineas": [
+              { "Text": { "text": "…" } },
+              { "List": { "intro": "…", "items": [
+                  { "Text": { "text": "…", "number": "(a)" } }
+              ] } }
+            ]
+          }
+        ]
+      }
+      // Annexes with flat numbered items or plain text use Paragraphs:
+      // "content": {
+      //   "Paragraphs": [
+      //     { "number": "1.", "alineas": [ { "Text": { "text": "…" } } ] },
+      //     { "number": "2.", "alineas": [ { "List": { "intro": "…", "items": [ "…" ] } } ] }
+      //   ]
+      // }
     }
   ],
 
