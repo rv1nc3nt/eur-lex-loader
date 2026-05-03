@@ -1,5 +1,5 @@
 /// Integration tests against the real Copyright in the Digital Single Market
-/// Directive Formex files in `data/DSMA`.
+/// Directive Formex files in `data/32019L0790`.
 ///
 /// These tests validate the structural counts established during development
 /// and act as a regression guard against parser changes.
@@ -10,8 +10,8 @@ use eur_lex_loader::model::{Act, ChapterContents, Subparagraph};
 
 #[test]
 fn dsma_structure() {
-    let act = load_act(Path::new("data/DSMA"))
-        .expect("failed to load DSMA from data/DSMA");
+    let act = load_act(Path::new("data/32019L0790"))
+        .expect("failed to load DSMA from data/32019L0790");
     let Act::Regular(reg) = act else { panic!("DSMA should be a Regular act") };
 
     // Title must identify the directive number.

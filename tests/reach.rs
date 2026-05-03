@@ -1,5 +1,5 @@
 /// Integration tests against the REACH Regulation Formex files in
-/// `data/REACH_reg` (consolidated version, CELEX 32006R1907).
+/// `data/32006R1907` (consolidated version, CELEX 32006R1907).
 ///
 /// These tests validate that consolidated acts — which use `<CONS.ACT>` as
 /// the root element and embed annexes as `<CONS.ANNEX>` elements — are parsed
@@ -11,8 +11,8 @@ use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, Subparagraph};
 
 #[test]
 fn reach_regulation_structure() {
-    let loaded = load_act(Path::new("data/REACH_reg"))
-        .expect("failed to load REACH regulation from data/REACH_reg");
+    let loaded = load_act(Path::new("data/32006R1907"))
+        .expect("failed to load REACH regulation from data/32006R1907");
     let Act::Consolidated(reg) = loaded else {
         panic!("REACH regulation should be a Consolidated act")
     };

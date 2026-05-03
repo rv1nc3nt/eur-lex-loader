@@ -1,4 +1,4 @@
-/// Integration tests against the real Digital Services Act Formex files in `data/DSA`.
+/// Integration tests against the real Digital Services Act Formex files in `data/32022R2065`.
 ///
 /// These tests validate the structural counts established during development
 /// and act as a regression guard against parser changes.
@@ -9,7 +9,7 @@ use eur_lex_loader::model::{Act, ChapterContents, Subparagraph};
 
 #[test]
 fn dsa_structure() {
-    let act = load_act(Path::new("data/DSA")).expect("failed to load DSA from data/DSA");
+    let act = load_act(Path::new("data/32022R2065")).expect("failed to load DSA from data/32022R2065");
     let Act::Regular(reg) = act else { panic!("DSA should be a Regular act") };
 
     // Title must identify the act number.

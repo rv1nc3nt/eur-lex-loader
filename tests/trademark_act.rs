@@ -1,5 +1,5 @@
 /// Integration tests against the real EU Trade Mark Regulation Formex files
-/// in `data/TrademarkAct`.
+/// in `data/32017R1001`.
 ///
 /// These tests validate the structural counts established during development
 /// and act as a regression guard against parser changes.
@@ -10,8 +10,8 @@ use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, Subparagraph};
 
 #[test]
 fn trademark_act_structure() {
-    let act = load_act(Path::new("data/TrademarkAct"))
-        .expect("failed to load TrademarkAct from data/TrademarkAct");
+    let act = load_act(Path::new("data/32017R1001"))
+        .expect("failed to load TrademarkAct from data/32017R1001");
     let Act::Regular(reg) = act else { panic!("TrademarkAct should be a Regular act") };
 
     // Title must identify the act number.

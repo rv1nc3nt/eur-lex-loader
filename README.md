@@ -114,13 +114,13 @@ Options:
 
 ```bash
 # Fetch the EU AI Act in English
-eur_lex_fetch 32024R1689 data/EU_AI_ACT
+eur_lex_fetch 32024R1689 data/32024R1689
 # → Fetching 32024R1689 (eng)...
-# → Extracted to data/EU_AI_ACT
+# → Extracted to data/32024R1689
 # → Regulation (EU) 2024/1689 of the European Parliament …
 
 # Fetch the REACH Regulation in French
-eur_lex_fetch 32006R1907 data/REACH_FR --lang fra
+eur_lex_fetch 32006R1907 data/32006R1907_fr --lang fra
 ```
 
 The extracted directory will contain several `.fmx.xml` files:
@@ -169,13 +169,13 @@ eur_lex_loader -c 32022R2065
 eur_lex_loader -c 32024R1689 --compact --output ai_act.json
 
 # Parse a previously downloaded act
-eur_lex_loader data/EU_AI_ACT
+eur_lex_loader data/32024R1689
 
 # Write compact JSON to a file
-eur_lex_loader data/EU_AI_ACT --compact --output ai_act.json
+eur_lex_loader data/32024R1689 --compact --output ai_act.json
 
 # Pipe pretty-printed JSON into jq
-eur_lex_loader data/EU_AI_ACT | jq '.preamble.recitals | length'
+eur_lex_loader data/32024R1689 | jq '.preamble.recitals | length'
 ```
 
 ### Output format
@@ -357,12 +357,12 @@ full parse of six different EU legislative acts against known structural counts:
 
 | File | Act | Format | Articles | Recitals | Definitions | Tables |
 |---|---|---|---|---|---|---|
-| `tests/eu_ai_act.rs` | EU AI Act (32024R1689) | Original | 113 | 180 | 68 | — |
-| `tests/dsa.rs` | Digital Services Act (32022R2065) | Original | 93 | 156 | 27 | — |
-| `tests/dsma.rs` | Copyright in the Digital Single Market (32019L0790) | Original | 32 | 86 | 6 | — |
-| `tests/trademark_act.rs` | EU Trade Mark Regulation (32017R1001) | Original | 212 | 48 | — | — |
-| `tests/reach.rs` | REACH Regulation (32006R1907) | Consolidated | 141 | — | — | ✓ |
-| `tests/consumer_directive.rs` | Consumer Rights Directive (32011L0083) | Consolidated | 36 | — | — | ✓ |
+| `tests/eu_ai_act.rs` | EU AI Act (`data/32024R1689`) | Original | 113 | 180 | 68 | — |
+| `tests/dsa.rs` | Digital Services Act (`data/32022R2065`) | Original | 93 | 156 | 27 | — |
+| `tests/dsma.rs` | Copyright in the Digital Single Market (`data/32019L0790`) | Original | 32 | 86 | 6 | — |
+| `tests/trademark_act.rs` | EU Trade Mark Regulation (`data/32017R1001`) | Original | 212 | 48 | — | — |
+| `tests/reach.rs` | REACH Regulation (`data/32006R1907`) | Consolidated | 141 | — | — | ✓ |
+| `tests/consumer_directive.rs` | Consumer Rights Directive (`data/32011L0083`) | Consolidated | 36 | — | — | ✓ |
 
 The table tests (✓) verify that `Subparagraph::Table` values are produced for
 annex tables in both Formex table encodings:
@@ -373,9 +373,7 @@ annex tables in both Formex table encodings:
   `<GR.TBL>` element, which carries an optional title above the table.
 
 The integration tests require the Formex data to be present in the `data/`
-directory. The fixtures for REACH and the Consumer Rights Directive are
-included in the repository; the other four must be fetched with `eur_lex_fetch`
-before running those tests.
+directory. All six fixtures are included in the repository.
 
 ---
 

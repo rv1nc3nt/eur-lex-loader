@@ -1,4 +1,4 @@
-/// Integration tests against the real EU AI Act Formex files in `data/EU_AI_ACT`.
+/// Integration tests against the real EU AI Act Formex files in `data/32024R1689`.
 ///
 /// These tests validate the structural counts established during development
 /// and act as a regression guard against parser changes.
@@ -9,8 +9,8 @@ use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, ListBlock, Subpa
 
 #[test]
 fn eu_ai_act_structure() {
-    let act = load_act(Path::new("data/EU_AI_ACT"))
-        .expect("failed to load EU AI Act from data/EU_AI_ACT");
+    let act = load_act(Path::new("data/32024R1689"))
+        .expect("failed to load EU AI Act from data/32024R1689");
     let Act::Regular(reg) = act else { panic!("EU AI Act should be a Regular act") };
 
     // Title must identify the act number.

@@ -1,5 +1,5 @@
 /// Integration tests against the Consumer Rights Directive Formex files in
-/// `data/Consumer_directive_consolidated` (consolidated version, CELEX 32011L0083).
+/// `data/32011L0083` (consolidated version, CELEX 32011L0083).
 ///
 /// Validates that a consolidated directive — a CONS.ACT document with no
 /// chapter sub-sections and inline CONS.ANNEX elements — is parsed correctly.
@@ -10,7 +10,7 @@ use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, Subparagraph};
 
 #[test]
 fn consumer_directive_structure() {
-    let loaded = load_act(Path::new("data/Consumer_directive_consolidated"))
+    let loaded = load_act(Path::new("data/32011L0083"))
         .expect("failed to load Consumer Rights Directive");
     let Act::Consolidated(act) = loaded else {
         panic!("Consumer Rights Directive should be a Consolidated act")
