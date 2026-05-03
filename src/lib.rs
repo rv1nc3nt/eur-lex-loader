@@ -14,15 +14,22 @@
 //!
 //! ```no_run
 //! use std::path::Path;
-//! use eur_lex_loader::load_act;
+//! use eur_lex_loader::{load_act, Act};
 //!
 //! let act = load_act(Path::new("/path/to/formex/dir")).unwrap();
-//! println!("{}", act.title);
-//! for chapter in &act.enacting_terms.chapters {
+//!
+//! // Convenience methods work on both Regular and Consolidated variants:
+//! println!("{}", act.title());
+//! for chapter in &act.enacting_terms().chapters {
 //!     println!("{}", chapter.title);
 //! }
-//! if let Some(def) = act.definitions.get("AI system") {
+//! if let Some(def) = act.definitions().get("AI system") {
 //!     println!("{def}");
+//! }
+//!
+//! // Pattern-match to access variant-specific fields (e.g. preamble visas):
+//! if let Act::Regular(reg) = &act {
+//!     println!("{} visas", reg.preamble.visas.len());
 //! }
 //! ```
 //!
@@ -33,12 +40,14 @@
 //!
 //! 1. Scan the directory for a `*.doc.fmx.xml` registry file.
 //! 2. Parse the registry to discover the act file and annex file paths.
-//! 3. Parse the act file into a title, [`model::Preamble`], and
-//!    [`model::EnactingTerms`].
-//! 4. Parse each annex file into an [`model::Annex`].
+//! 3. For regular acts, parse the main file into a [`model::Preamble`] and
+//!    [`model::EnactingTerms`], then parse each separate annex file.
+//! 4. For consolidated acts, parse the single file into a
+//!    [`model::ConsolidatedPreamble`] and [`model::EnactingTerms`], then
+//!    extract inline `<CONS.ANNEX>` elements.
 //! 5. Extract definitions from any article titled "Definitions" into a
 //!    [`std::collections::HashMap`].
-//! 6. Assemble everything into an [`Act`].
+//! 6. Assemble everything into an [`Act::Regular`] or [`Act::Consolidated`].
 
 /// Error types for loading and parsing Formex acts.
 pub mod error;
@@ -52,4 +61,4 @@ pub mod parser;
 pub mod text;
 
 pub use loader::load_act;
-pub use model::Act;
+pub use model::{Act, RegularAct, ConsolidatedAct, ConsolidatedPreamble};

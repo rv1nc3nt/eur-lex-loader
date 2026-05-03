@@ -6,12 +6,13 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{AnnexContent, ChapterContents, Subparagraph};
+use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, Subparagraph};
 
 #[test]
 fn trademark_act_structure() {
-    let reg = load_act(Path::new("data/TrademarkAct"))
+    let act = load_act(Path::new("data/TrademarkAct"))
         .expect("failed to load TrademarkAct from data/TrademarkAct");
+    let Act::Regular(reg) = act else { panic!("TrademarkAct should be a Regular act") };
 
     // Title must identify the act number.
     assert!(

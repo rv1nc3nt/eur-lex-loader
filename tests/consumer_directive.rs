@@ -6,12 +6,15 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{AnnexContent, ChapterContents, Subparagraph};
+use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, Subparagraph};
 
 #[test]
 fn consumer_directive_structure() {
-    let act = load_act(Path::new("data/Consumer_directive_consolidated"))
+    let loaded = load_act(Path::new("data/Consumer_directive_consolidated"))
         .expect("failed to load Consumer Rights Directive");
+    let Act::Consolidated(act) = loaded else {
+        panic!("Consumer Rights Directive should be a Consolidated act")
+    };
 
     // Title must identify the directive number.
     assert!(
@@ -19,10 +22,6 @@ fn consumer_directive_structure() {
         "title did not contain '2011/83': {}",
         act.title
     );
-
-    // Consolidated preamble has no visas or recitals.
-    assert!(act.preamble.visas.is_empty(), "consolidated preamble should have no visas");
-    assert!(act.preamble.recitals.is_empty(), "consolidated preamble should have no recitals");
 
     // 6 chapters, all with direct articles (no section sub-divisions).
     assert_eq!(act.enacting_terms.chapters.len(), 6, "unexpected chapter count");

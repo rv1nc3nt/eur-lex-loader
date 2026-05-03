@@ -5,35 +5,45 @@ use crate::model::*;
 use crate::text::extract_text;
 use super::{child, parse_block_children};
 
-/// Parses a Formex main-act XML string (`<ACT>` root) into its three parts.
+/// Parses a regular Formex act XML string (`<ACT>` root) into its three parts.
 ///
-/// Returns `(title, preamble, enacting_terms)`.  The caller is responsible for
-/// combining these with parsed annexes to build a [`crate::model::Act`].
+/// Returns `(title, preamble, enacting_terms)`. The caller assembles these with
+/// parsed annex files to build a [`crate::model::RegularAct`].
 ///
 /// # Errors
 ///
 /// Returns [`crate::error::Error::Xml`] for malformed XML and
 /// [`crate::error::Error::MissingElement`] if `<TITLE>`, `<PREAMBLE>`, or
 /// `<ENACTING.TERMS>` are absent from the document root.
-pub fn parse_act(xml: &str) -> Result<(String, Preamble, EnactingTerms), Error> {
+pub fn parse_regular_act(xml: &str) -> Result<(String, Preamble, EnactingTerms), Error> {
     let doc = Document::parse(xml)?;
     let root = doc.root_element();
+    let title = parse_title(child(root, "TITLE")?)?;
+    let preamble = parse_preamble(child(root, "PREAMBLE")?)?;
+    let enacting_terms = parse_enacting_terms(child(root, "ENACTING.TERMS")?)?;
+    Ok((title, preamble, enacting_terms))
+}
 
-    // Consolidated acts use <CONS.ACT> as the root element, with <TITLE>,
-    // <PREAMBLE>, and <ENACTING.TERMS> nested inside <CONS.DOC>.
-    // Regular acts use <ACT> as the root with those elements as direct children.
-    let content = if root.tag_name().name() == "CONS.ACT" {
-        root.children()
-            .find(|n| n.is_element() && n.tag_name().name() == "CONS.DOC")
-            .ok_or(Error::MissingElement("CONS.DOC"))?
-    } else {
-        root
-    };
-
+/// Parses a consolidated Formex act XML string (`<CONS.ACT>` root) into its three parts.
+///
+/// Returns `(title, preamble, enacting_terms)`. The caller assembles these with
+/// inline `<CONS.ANNEX>` elements to build a [`crate::model::ConsolidatedAct`].
+///
+/// # Errors
+///
+/// Returns [`crate::error::Error::Xml`] for malformed XML and
+/// [`crate::error::Error::MissingElement`] if `<CONS.DOC>`, `<TITLE>`,
+/// `<PREAMBLE>`, or `<ENACTING.TERMS>` are absent.
+pub fn parse_consolidated_act(xml: &str) -> Result<(String, ConsolidatedPreamble, EnactingTerms), Error> {
+    let doc = Document::parse(xml)?;
+    let root = doc.root_element();
+    let content = root
+        .children()
+        .find(|n| n.is_element() && n.tag_name().name() == "CONS.DOC")
+        .ok_or(Error::MissingElement("CONS.DOC"))?;
     let title = parse_title(child(content, "TITLE")?)?;
-    let preamble = parse_preamble(child(content, "PREAMBLE")?)?;
+    let preamble = parse_consolidated_preamble(child(content, "PREAMBLE")?)?;
     let enacting_terms = parse_enacting_terms(child(content, "ENACTING.TERMS")?)?;
-
     Ok((title, preamble, enacting_terms))
 }
 
@@ -85,6 +95,21 @@ fn parse_preamble(node: Node) -> Result<Preamble, Error> {
         .unwrap_or_default();
 
     Ok(Preamble { init, visas, recitals, enacting_formula })
+}
+
+/// Extracts the two fields of a consolidated preamble (no visas or recitals).
+fn parse_consolidated_preamble(node: Node) -> Result<ConsolidatedPreamble, Error> {
+    let init = node
+        .children()
+        .find(|n| n.is_element() && n.tag_name().name() == "PREAMBLE.INIT")
+        .map(extract_text)
+        .unwrap_or_default();
+    let enacting_formula = node
+        .children()
+        .find(|n| n.is_element() && n.tag_name().name() == "PREAMBLE.FINAL")
+        .map(extract_text)
+        .unwrap_or_default();
+    Ok(ConsolidatedPreamble { init, enacting_formula })
 }
 
 /// Extracts the number and text from a single `<CONSID>` recital element.
@@ -256,7 +281,7 @@ mod tests {
 
     #[test]
     fn parse_act_missing_title() {
-        let result = parse_act("<ACT><PREAMBLE/><ENACTING.TERMS/></ACT>");
+        let result = parse_regular_act("<ACT><PREAMBLE/><ENACTING.TERMS/></ACT>");
         assert!(matches!(result, Err(Error::MissingElement(_))));
     }
 
@@ -283,11 +308,10 @@ mod tests {
                 </ENACTING.TERMS>
             </CONS.DOC>
         </CONS.ACT>"#;
-        let (title, preamble, enacting_terms) = parse_act(xml).unwrap();
+        let (title, preamble, enacting_terms) = parse_consolidated_act(xml).unwrap();
         assert_eq!(title, "Test Consolidated Regulation");
         assert_eq!(preamble.init, "THE COUNCIL,");
-        assert!(preamble.visas.is_empty(), "consolidated preamble has no visas");
-        assert!(preamble.recitals.is_empty(), "consolidated preamble has no recitals");
+        assert_eq!(preamble.enacting_formula, "HAVE ADOPTED:");
         assert_eq!(enacting_terms.chapters.len(), 1);
     }
 
@@ -316,13 +340,13 @@ mod tests {
                 </ENACTING.TERMS>
             </CONS.DOC>
         </CONS.ACT>"#;
-        let (_, _, enacting_terms) = parse_act(xml).unwrap();
+        let (_, _, enacting_terms) = parse_consolidated_act(xml).unwrap();
         assert_eq!(enacting_terms.chapters.len(), 2, "TOC must not be counted as a chapter");
     }
 
     #[test]
     fn parse_act_missing_preamble() {
-        let result = parse_act(
+        let result = parse_regular_act(
             "<ACT><TITLE><TI><P>Title</P></TI></TITLE><ENACTING.TERMS/></ACT>",
         );
         assert!(matches!(result, Err(Error::MissingElement(_))));
@@ -330,7 +354,7 @@ mod tests {
 
     #[test]
     fn parse_act_missing_enacting_terms() {
-        let result = parse_act(
+        let result = parse_regular_act(
             "<ACT><TITLE><TI><P>Title</P></TI></TITLE><PREAMBLE/></ACT>",
         );
         assert!(matches!(result, Err(Error::MissingElement(_))));

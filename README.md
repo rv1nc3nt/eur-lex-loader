@@ -300,15 +300,22 @@ eur-lex-loader = { path = "…" }
 ```
 
 ```rust
-use eur_lex_loader::loader::load_act;
+use eur_lex_loader::{loader::load_act, Act};
 use std::path::Path;
 
 fn main() -> Result<(), eur_lex_loader::error::Error> {
     let act = load_act(Path::new("data/MY_REGULATION"))?;
-    println!("Title: {}", act.title);
-    println!("Recitals: {}", act.preamble.recitals.len());
-    if let Some(def) = act.definitions.get("AI system") {
+
+    // Convenience methods work on both Regular and Consolidated acts:
+    println!("Title: {}", act.title());
+    if let Some(def) = act.definitions().get("AI system") {
         println!("AI system: {def}");
+    }
+
+    // Pattern-match to access variant-specific fields:
+    match &act {
+        Act::Regular(reg) => println!("Recitals: {}", reg.preamble.recitals.len()),
+        Act::Consolidated(_) => println!("(consolidated — no recitals)"),
     }
     Ok(())
 }

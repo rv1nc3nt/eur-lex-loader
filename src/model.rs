@@ -2,31 +2,109 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize}; // Deserialize needed for Subparagraph/ListBlock in tests
 
-/// A complete EU legislative act (regulation or directive) assembled from a
-/// Formex publication directory.
+/// A parsed EU legislative act.
 ///
-/// Combines the main act file (`*.000101.fmx.xml`) with all annex files
-/// (`*.012401.fmx.xml`, etc.) discovered via the `.doc.fmx.xml` registry.
+/// The two variants reflect the two Formex publication formats:
+/// - [`Act::Regular`] — an original act (`<ACT>` root) with a full preamble
+///   including legal-basis citations (visas) and numbered recitals.
+/// - [`Act::Consolidated`] — a consolidated version (`<CONS.ACT>` root) with a
+///   slim preamble: visas and recitals are structurally absent.
+///
+/// Serialises without a variant tag (`#[serde(untagged)]`), so the JSON output
+/// is structurally identical to the underlying struct for each variant.
+///
+/// Convenience methods ([`Act::title`], [`Act::enacting_terms`],
+/// [`Act::annexes`], [`Act::definitions`]) provide access to shared fields
+/// without pattern-matching on the variant.
 #[derive(Serialize)]
-pub struct Act {
+#[serde(untagged)]
+pub enum Act {
+    /// An original act with a full preamble.
+    Regular(RegularAct),
+    /// A consolidated act with a slim preamble (no visas or recitals).
+    Consolidated(ConsolidatedAct),
+}
+
+impl Act {
+    /// The full title of the act.
+    pub fn title(&self) -> &str {
+        match self {
+            Act::Regular(a) => &a.title,
+            Act::Consolidated(a) => &a.title,
+        }
+    }
+
+    /// The operative body of the act.
+    pub fn enacting_terms(&self) -> &EnactingTerms {
+        match self {
+            Act::Regular(a) => &a.enacting_terms,
+            Act::Consolidated(a) => &a.enacting_terms,
+        }
+    }
+
+    /// The annexes, in document order.
+    pub fn annexes(&self) -> &[Annex] {
+        match self {
+            Act::Regular(a) => &a.annexes,
+            Act::Consolidated(a) => &a.annexes,
+        }
+    }
+
+    /// Definitions extracted from any "Definitions" article. Empty when absent.
+    pub fn definitions(&self) -> &HashMap<String, String> {
+        match self {
+            Act::Regular(a) => &a.definitions,
+            Act::Consolidated(a) => &a.definitions,
+        }
+    }
+}
+
+/// A complete original EU act (`<ACT>` root), with a full preamble.
+#[derive(Serialize)]
+pub struct RegularAct {
     /// The full title of the act, e.g. `"Regulation (EU) 2024/1689 …"`.
     pub title: String,
-    /// The preamble preceding the operative articles: opening formula, legal
-    /// basis citations (visas), numbered recitals, and enacting formula.
+    /// The preamble: opening formula, legal bases, numbered recitals, enacting formula.
     pub preamble: Preamble,
-    /// The operative body of the act, structured as chapters that contain
-    /// either sections or articles directly.
+    /// The operative body of the act.
     pub enacting_terms: EnactingTerms,
     /// The annexes, in the order declared by the `.doc.fmx.xml` registry.
     pub annexes: Vec<Annex>,
-    /// Definitions extracted from any "Definitions" article in the enacting terms.
-    ///
-    /// Key: defined term (e.g. `"AI system"`).
-    /// Value: full definition text as it appears in the act
-    /// (e.g. `"\u{201C}AI system\u{201D} means …"`).
-    /// Omitted from JSON when the act has no Definitions article.
+    /// Definitions extracted from any "Definitions" article. Omitted from JSON when absent.
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub definitions: HashMap<String, String>,
+}
+
+/// A complete consolidated EU act (`<CONS.ACT>` root), with a slim preamble.
+///
+/// Consolidated acts do not carry visas or recitals; use [`RegularAct`] when
+/// you need those fields.
+#[derive(Serialize)]
+pub struct ConsolidatedAct {
+    /// The full title of the act.
+    pub title: String,
+    /// The slim preamble: opening formula and enacting formula only.
+    pub preamble: ConsolidatedPreamble,
+    /// The operative body of the act.
+    pub enacting_terms: EnactingTerms,
+    /// The annexes, parsed inline from `<CONS.ANNEX>` elements.
+    pub annexes: Vec<Annex>,
+    /// Definitions extracted from any "Definitions" article. Omitted from JSON when absent.
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub definitions: HashMap<String, String>,
+}
+
+/// The slim preamble of a consolidated act.
+///
+/// Consolidated acts (`<CONS.ACT>`) carry only the opening institutional
+/// formula and the enacting formula; legal-basis citations and recitals are
+/// structurally absent (unlike [`Preamble`] where they are optional lists).
+#[derive(Serialize)]
+pub struct ConsolidatedPreamble {
+    /// Opening institutional formula (`<PREAMBLE.INIT>`).
+    pub init: String,
+    /// Closing enacting formula (`<PREAMBLE.FINAL>`).
+    pub enacting_formula: String,
 }
 
 /// The preamble of an act (`<PREAMBLE>`).

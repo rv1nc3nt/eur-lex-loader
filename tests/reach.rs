@@ -7,12 +7,15 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{AnnexContent, ChapterContents, Subparagraph};
+use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, Subparagraph};
 
 #[test]
 fn reach_regulation_structure() {
-    let reg = load_act(Path::new("data/REACH_reg"))
+    let loaded = load_act(Path::new("data/REACH_reg"))
         .expect("failed to load REACH regulation from data/REACH_reg");
+    let Act::Consolidated(reg) = loaded else {
+        panic!("REACH regulation should be a Consolidated act")
+    };
 
     // Title must identify the regulation number.
     assert!(
@@ -20,10 +23,6 @@ fn reach_regulation_structure() {
         "title did not contain '1907/2006': {}",
         reg.title
     );
-
-    // Consolidated preamble has no visas or recitals.
-    assert!(reg.preamble.visas.is_empty(), "consolidated preamble should have no visas");
-    assert!(reg.preamble.recitals.is_empty(), "consolidated preamble should have no recitals");
 
     // 15 top-level titles.
     assert_eq!(reg.enacting_terms.chapters.len(), 15, "unexpected chapter count");

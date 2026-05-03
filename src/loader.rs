@@ -6,8 +6,8 @@ use roxmltree::Document;
 use std::collections::HashMap;
 
 use crate::error::Error;
-use crate::model::{Act, ChapterContents, ListBlock, Subparagraph};
-use crate::parser::{parse_act, parse_annex, parse_cons_annex};
+use crate::model::{Act, ConsolidatedAct, RegularAct, ChapterContents, ListBlock, Subparagraph};
+use crate::parser::{parse_regular_act, parse_consolidated_act, parse_annex, parse_cons_annex};
 
 /// Loads a complete act from a directory of Formex `.fmx.xml` files.
 ///
@@ -26,22 +26,24 @@ pub fn load_act(data_dir: &Path) -> Result<Act, Error> {
     let (main_file, annex_files) = discover_files(&doc_file)?;
 
     let main_xml = read_file(&data_dir.join(&main_file))?;
-    let (title, preamble, enacting_terms) = parse_act(&main_xml)?;
 
-    let annexes = if is_consolidated(&main_xml) {
-        parse_cons_annex(&main_xml)?
+    if is_consolidated(&main_xml) {
+        let (title, preamble, enacting_terms) = parse_consolidated_act(&main_xml)?;
+        let annexes = parse_cons_annex(&main_xml)?;
+        let definitions = extract_definitions(&enacting_terms);
+        Ok(Act::Consolidated(ConsolidatedAct { title, preamble, enacting_terms, annexes, definitions }))
     } else {
-        annex_files
+        let (title, preamble, enacting_terms) = parse_regular_act(&main_xml)?;
+        let annexes = annex_files
             .iter()
             .map(|f| {
                 let xml = read_file(&data_dir.join(f))?;
                 parse_annex(&xml)
             })
-            .collect::<Result<Vec<_>, _>>()?
-    };
-
-    let definitions = extract_definitions(&enacting_terms);
-    Ok(Act { title, preamble, enacting_terms, annexes, definitions })
+            .collect::<Result<Vec<_>, _>>()?;
+        let definitions = extract_definitions(&enacting_terms);
+        Ok(Act::Regular(RegularAct { title, preamble, enacting_terms, annexes, definitions }))
+    }
 }
 
 /// Traverses `enacting_terms` to find all articles whose title contains

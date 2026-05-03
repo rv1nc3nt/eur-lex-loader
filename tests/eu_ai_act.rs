@@ -5,12 +5,13 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{AnnexContent, ChapterContents, ListBlock, Subparagraph};
+use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, ListBlock, Subparagraph};
 
 #[test]
 fn eu_ai_act_structure() {
-    let reg = load_act(Path::new("data/EU_AI_ACT"))
+    let act = load_act(Path::new("data/EU_AI_ACT"))
         .expect("failed to load EU AI Act from data/EU_AI_ACT");
+    let Act::Regular(reg) = act else { panic!("EU AI Act should be a Regular act") };
 
     // Title must identify the act number.
     assert!(

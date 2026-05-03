@@ -16,7 +16,7 @@ mod act;
 /// Parser for annex XML files (`<ANNEX>` root).
 mod annex;
 
-pub use act::parse_act;
+pub use act::{parse_regular_act, parse_consolidated_act};
 pub use annex::{parse_annex, parse_cons_annex};
 
 use roxmltree::Node;

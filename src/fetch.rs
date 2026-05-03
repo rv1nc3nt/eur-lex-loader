@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("Extracted to {}", cli.dir.display());
 
     let act = load_act(&cli.dir)?;
-    println!("{}", act.title);
+    println!("{}", act.title());
 
     Ok(())
 }

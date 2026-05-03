@@ -6,12 +6,13 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{ChapterContents, Subparagraph};
+use eur_lex_loader::model::{Act, ChapterContents, Subparagraph};
 
 #[test]
 fn dsma_structure() {
-    let reg = load_act(Path::new("data/DSMA"))
+    let act = load_act(Path::new("data/DSMA"))
         .expect("failed to load DSMA from data/DSMA");
+    let Act::Regular(reg) = act else { panic!("DSMA should be a Regular act") };
 
     // Title must identify the directive number.
     assert!(

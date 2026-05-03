@@ -5,11 +5,12 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{ChapterContents, Subparagraph};
+use eur_lex_loader::model::{Act, ChapterContents, Subparagraph};
 
 #[test]
 fn dsa_structure() {
-    let reg = load_act(Path::new("data/DSA")).expect("failed to load DSA from data/DSA");
+    let act = load_act(Path::new("data/DSA")).expect("failed to load DSA from data/DSA");
+    let Act::Regular(reg) = act else { panic!("DSA should be a Regular act") };
 
     // Title must identify the act number.
     assert!(
