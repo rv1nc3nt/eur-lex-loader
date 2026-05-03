@@ -1,80 +1,84 @@
 # eur-lex-loader
 
-A Rust library and command-line tool for parsing EU acts (regulations and
-directives) published in [Formex 4](https://op.europa.eu/en/web/eu-vocabularies/formex)
-XML format and converting them to JSON.
+A Rust crate for working with EU legislative acts published in
+[Formex 4](https://op.europa.eu/en/web/eu-vocabularies/formex) XML format.
+It provides two command-line tools and a library:
+
+- **`eur_lex_fetch`** — downloads a Formex publication from the EUR-Lex Cellar
+  repository by CELEX number and extracts it into a local directory.
+- **`eur_lex_loader`** — parses a local Formex directory and converts the act to
+  JSON, or fetches and converts in a single step.
+- **Library** — exposes `load_act` and the full data model for embedding in Rust
+  applications. The public API is documented with `cargo doc --open`.
 
 The library extracts the full document structure: title, preamble (legal bases
-and recitals), enacting terms (chapters, sections, and articles with nested
-lists), annexes, and a flat definitions map when the act contains a Definitions
-article.
+and recitals), enacting terms (chapters, sections, articles, and nested
+lists), tables, annexes, and a flat definitions map when the act contains a
+Definitions article. Both original and consolidated acts are supported.
 
 ---
 
-## Getting the data
+## European legislative acts
 
-EU acts are published as Formex XML files in the
-[Cellar](https://op.europa.eu/en/web/cellar) repository maintained by the
-Publications Office of the European Union. No API key or account is required.
+The European Union produces two main types of binding secondary legislation.
 
-### Finding the CELEX number
+**Regulations** are directly applicable across all member states from the
+moment they enter into force. No national transposition is needed; a regulation
+has the same legal force as national law in every member state the day it is
+published in the Official Journal.
 
-Every EU legal act has a CELEX number. The format for regulations is:
+**Directives** are binding as to the result to be achieved but leave each
+member state free to choose the form and methods. They must be transposed into
+national law within a deadline set by the directive itself. The national
+transposition laws differ from country to country, but the outcome must meet
+the directive's requirements.
+
+**Consolidated versions** are unofficial editorial compilations produced by the
+Publications Office. They integrate all subsequent amendments into the original
+text so that readers see the current wording in a single document, without
+having to cross-reference a chain of amending acts. Consolidated versions have
+no independent legal force — only the original act and its amending acts are
+legally binding — but they are the most convenient starting point for reading
+the current state of a piece of legislation.
+
+---
+
+## EUR-Lex, Cellar, and CELEX numbers
+
+[EUR-Lex](https://eur-lex.europa.eu) is the official portal for EU law,
+providing free access to the Official Journal and to the full text of all EU
+legislative acts.
+
+The [Cellar](https://op.europa.eu/en/web/cellar) content repository, maintained
+by the Publications Office of the European Union, is the underlying store from
+which EUR-Lex serves its content. Formex XML files are available directly from
+Cellar without authentication.
+
+### CELEX numbers
+
+Every EU legal act has a unique CELEX identifier. The format is:
 
 ```
-3 YYYY R NNNN
+3 YYYY T NNNN
 │  │   │  └─ sequential number within the year
-│  │   └─ document type (R = Regulation, L = Directive)
+│  │   └─ document type: R = Regulation, L = Directive
 │  └─ year of publication
-└─ sector (3 = secondary legislation)
+└─ sector: 3 = secondary legislation
 ```
 
-Examples:
-| Act | CELEX |
-|---|---|
-| EU AI Act (2024) | `32024R1689` |
-| GDPR (2016) | `32016R0679` |
-| DSA (2022) | `32022R2065` |
-| EU Trade Mark Regulation (2017) | `32017R1001` |
-| Copyright in the Digital Single Market Directive (2019) | `32019L0790` |
+Examples — all six acts included as test fixtures in this repository:
 
-The CELEX number appears in the EUR-Lex URL for any act, e.g.:
+| Act | CELEX | Format |
+|---|---|---|
+| EU AI Act (2024) | `32024R1689` | Original regulation |
+| Digital Services Act (2022) | `32022R2065` | Original regulation |
+| EU Trade Mark Regulation (2017) | `32017R1001` | Original regulation |
+| Copyright in the Digital Single Market Directive (2019) | `32019L0790` | Original directive |
+| REACH Regulation (2006) | `32006R1907` | Consolidated regulation |
+| Consumer Rights Directive (2011) | `32011L0083` | Consolidated directive |
+
+The CELEX number appears in every EUR-Lex URL, e.g.:
 `https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689`
-
-### Downloading Formex XML
-
-Use the Cellar REST API to download a ZIP archive of all Formex files for an
-act. Pass the CELEX number directly in the URL:
-
-```bash
-curl -L \
-  -H "Accept: application/zip;mtype=fmx4" \
-  -H "Accept-Language: eng" \
-  "http://publications.europa.eu/resource/celex/32024R1689" \
-  -o regulation.zip
-```
-
-- `-L` follows redirects (required — the API returns a redirect)
-- `mtype=fmx4` requests the Formex 4 package
-- `Accept-Language: eng` requests the English language version; use `fra`,
-  `deu`, `ita`, etc. for other languages
-
-Unzip the archive into a directory:
-
-```bash
-unzip regulation.zip -d data/MY_REGULATION
-```
-
-The directory will contain several `.fmx.xml` files:
-
-| Filename pattern | Content |
-|---|---|
-| `*.000101.fmx.xml` | Main act (title, preamble, enacting terms) |
-| `*.012401.fmx.xml` and above | Annexes, one file each |
-| `*.doc.fmx.xml` | Registry listing all files in order |
-| `*.toc.fmx.xml` | Table of contents (not used by this tool) |
-
-> **Rate limiting**: keep concurrent requests below 5 per IP address.
 
 ---
 
@@ -84,17 +88,16 @@ The directory will contain several `.fmx.xml` files:
 cargo build --release
 ```
 
-Two binaries are produced under `target/release/`.
+Two binaries are produced under `target/release/`: `eur_lex_fetch` and
+`eur_lex_loader`.
 
 ---
 
-## Usage
+## Fetching an act — `eur_lex_fetch`
 
-### `eur_lex_fetch` — download a Formex publication
-
-Fetches a ZIP archive from the EUR-Lex Cellar API by CELEX number, extracts it
-into a local directory, then prints the act title so you can confirm the correct
-act was retrieved.
+Downloads a Formex ZIP archive from the EUR-Lex Cellar API by CELEX number,
+extracts it into a local directory, then prints the act title to stdout so you
+can confirm the correct act was retrieved. Progress messages go to stderr.
 
 ```
 eur_lex_fetch [OPTIONS] <CELEX> <DIR>
@@ -109,24 +112,38 @@ Options:
   -V, --version      Print version
 ```
 
-Progress messages are written to stderr; the title is written to stdout.
-
 ```bash
 # Fetch the EU AI Act in English
 eur_lex_fetch 32024R1689 data/EU_AI_ACT
 # → Fetching 32024R1689 (eng)...
 # → Extracted to data/EU_AI_ACT
-# → Regulation (EU) 2024/1689 …
+# → Regulation (EU) 2024/1689 of the European Parliament …
 
-# Fetch the DSA in French
-eur_lex_fetch 32022R2065 data/DSA_FR --lang fra
+# Fetch the REACH Regulation in French
+eur_lex_fetch 32006R1907 data/REACH_FR --lang fra
 ```
 
-### `eur_lex_loader` — parse and convert to JSON
+The extracted directory will contain several `.fmx.xml` files:
+
+| Filename pattern | Content |
+|---|---|
+| `*.000101.fmx.xml` | Main act (title, preamble, enacting terms) |
+| `*.012401.fmx.xml` and above | Annexes, one file each (original acts) |
+| `*.doc.fmx.xml` | Registry listing all files in order |
+| `*.toc.fmx.xml` | Table of contents (not used by this tool) |
+
+Consolidated acts embed their annexes inline in the main file; no separate
+annex files are produced.
+
+> **Rate limiting**: keep concurrent requests below 5 per IP address.
+
+---
+
+## Converting to JSON — `eur_lex_loader`
 
 Parses a local Formex directory (previously fetched with `eur_lex_fetch` or
-downloaded manually) and outputs the act as JSON. Can also fetch on the fly
-without saving the Formex files.
+downloaded manually) and writes the act as JSON to stdout or a file. Can also
+fetch directly from Cellar without saving the Formex files locally.
 
 ```
 eur_lex_loader [OPTIONS] [DIR]
@@ -151,21 +168,60 @@ eur_lex_loader -c 32022R2065
 # Fetch the EU AI Act and write compact JSON to a file
 eur_lex_loader -c 32024R1689 --compact --output ai_act.json
 
-# Parse a previously downloaded regulation
-eur_lex_loader data/MY_REGULATION
+# Parse a previously downloaded act
+eur_lex_loader data/EU_AI_ACT
 
 # Write compact JSON to a file
-eur_lex_loader data/MY_REGULATION --compact --output regulation.json
+eur_lex_loader data/EU_AI_ACT --compact --output ai_act.json
 
 # Pipe pretty-printed JSON into jq
-eur_lex_loader data/MY_REGULATION | jq '.preamble.recitals | length'
+eur_lex_loader data/EU_AI_ACT | jq '.preamble.recitals | length'
 ```
 
----
+### Output format
 
-## Output format
+The tool outputs a single JSON object. The shape depends on whether the act is
+an original or a consolidated version.
 
-The tool outputs a single JSON object with the following shape:
+**Original acts** include a full preamble:
+
+```jsonc
+{
+  "title": "Regulation (EU) 2024/1689 …",
+
+  "preamble": {
+    "init": "THE EUROPEAN PARLIAMENT AND THE COUNCIL …",
+    "visas": ["Having regard to …", "…"],
+    "recitals": [
+      { "number": "(1)", "text": "The purpose of this Regulation …" },
+      "…"
+    ],
+    "enacting_formula": "HAVE ADOPTED THIS REGULATION:"
+  },
+
+  "enacting_terms": { "…": "…" },
+  "annexes": [ "…" ],
+  "definitions": { "…": "…" }
+}
+```
+
+**Consolidated acts** have a slim preamble with no visas or recitals:
+
+```jsonc
+{
+  "title": "Regulation (EC) No 1907/2006 …",
+
+  "preamble": {
+    "init": "THE EUROPEAN PARLIAMENT AND THE COUNCIL …",
+    "enacting_formula": "HAVE ADOPTED THIS REGULATION:"
+  },
+
+  "enacting_terms": { "…": "…" },
+  "annexes": [ "…" ]
+}
+```
+
+**Full output shape:**
 
 ```jsonc
 {
@@ -290,41 +346,6 @@ lists). `title` is omitted from `Table` when the `<TBL>` element has no
 
 ---
 
-## Library usage
-
-Add to `Cargo.toml`:
-
-```toml
-[dependencies]
-eur-lex-loader = { path = "…" }
-```
-
-```rust
-use eur_lex_loader::{loader::load_act, Act};
-use std::path::Path;
-
-fn main() -> Result<(), eur_lex_loader::error::Error> {
-    let act = load_act(Path::new("data/MY_REGULATION"))?;
-
-    // Convenience methods work on both Regular and Consolidated acts:
-    println!("Title: {}", act.title());
-    if let Some(def) = act.definitions().get("AI system") {
-        println!("AI system: {def}");
-    }
-
-    // Pattern-match to access variant-specific fields:
-    match &act {
-        Act::Regular(reg) => println!("Recitals: {}", reg.preamble.recitals.len()),
-        Act::Consolidated(_) => println!("(consolidated — no recitals)"),
-    }
-    Ok(())
-}
-```
-
-The public API is documented with `cargo doc --open`.
-
----
-
 ## Running the tests
 
 ```bash
@@ -334,14 +355,27 @@ cargo test
 Unit tests live alongside their source modules. Integration tests validate the
 full parse of six different EU legislative acts against known structural counts:
 
-| File | Act | Format | Articles | Recitals | Definitions |
-|---|---|---|---|---|---|
-| `tests/eu_ai_act.rs` | EU AI Act (32024R1689) | Original | 113 | 180 | 68 |
-| `tests/dsa.rs` | Digital Services Act (32022R2065) | Original | 93 | 156 | 27 |
-| `tests/dsma.rs` | Copyright in the Digital Single Market (32019L0790) | Original | 32 | 86 | 6 |
-| `tests/trademark_act.rs` | EU Trade Mark Regulation (32017R1001) | Original | 212 | 48 | — |
-| `tests/reach.rs` | REACH Regulation (32006R1907) | Consolidated | 141 | — | — |
-| `tests/consumer_directive.rs` | Consumer Rights Directive (32011L0083) | Consolidated | 36 | — | — |
+| File | Act | Format | Articles | Recitals | Definitions | Tables |
+|---|---|---|---|---|---|---|
+| `tests/eu_ai_act.rs` | EU AI Act (32024R1689) | Original | 113 | 180 | 68 | — |
+| `tests/dsa.rs` | Digital Services Act (32022R2065) | Original | 93 | 156 | 27 | — |
+| `tests/dsma.rs` | Copyright in the Digital Single Market (32019L0790) | Original | 32 | 86 | 6 | — |
+| `tests/trademark_act.rs` | EU Trade Mark Regulation (32017R1001) | Original | 212 | 48 | — | — |
+| `tests/reach.rs` | REACH Regulation (32006R1907) | Consolidated | 141 | — | — | ✓ |
+| `tests/consumer_directive.rs` | Consumer Rights Directive (32011L0083) | Consolidated | 36 | — | — | ✓ |
+
+The table tests (✓) verify that `Subparagraph::Table` values are produced for
+annex tables in both Formex table encodings:
+
+- **REACH** (ANNEX IV) — a bare `<TBL>` element sitting directly inside a
+  `<CONTENTS>` block, with no wrapping `<GR.TBL>`.
+- **Consumer Rights Directive** (ANNEX II) — a correlation table wrapped in a
+  `<GR.TBL>` element, which carries an optional title above the table.
+
+The integration tests require the Formex data to be present in the `data/`
+directory. The fixtures for REACH and the Consumer Rights Directive are
+included in the repository; the other four must be fetched with `eur_lex_fetch`
+before running those tests.
 
 ---
 
@@ -350,5 +384,6 @@ full parse of six different EU legislative acts against known structural counts:
 - Only the English Formex 4 format is tested.
 - Footnote bodies (`<NOTE>`) are dropped during text extraction; only the
   surrounding sentence is preserved.
-- Formex elements not covered by the model (e.g. tables, images) are silently
-  ignored; plain text inside them is still extracted where possible.
+- Formex elements not covered by the model (e.g. images, mathematical formulae)
+  are silently reduced to their plain-text content where possible; structure is
+  lost.
