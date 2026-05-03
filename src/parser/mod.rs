@@ -15,7 +15,7 @@ mod act;
 mod annex;
 
 pub use act::parse_act;
-pub use annex::parse_annex;
+pub use annex::{parse_annex, parse_cons_annex};
 
 use roxmltree::Node;
 

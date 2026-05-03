@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::error::Error;
 use crate::model::{Act, ChapterContents, ListBlock, Subparagraph};
-use crate::parser::{parse_act, parse_annex};
+use crate::parser::{parse_act, parse_annex, parse_cons_annex};
 
 /// Loads a complete act from a directory of Formex `.fmx.xml` files.
 ///
@@ -28,13 +28,17 @@ pub fn load_act(data_dir: &Path) -> Result<Act, Error> {
     let main_xml = read_file(&data_dir.join(&main_file))?;
     let (title, preamble, enacting_terms) = parse_act(&main_xml)?;
 
-    let annexes = annex_files
-        .iter()
-        .map(|f| {
-            let xml = read_file(&data_dir.join(f))?;
-            parse_annex(&xml)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let annexes = if is_consolidated(&main_xml) {
+        parse_cons_annex(&main_xml)?
+    } else {
+        annex_files
+            .iter()
+            .map(|f| {
+                let xml = read_file(&data_dir.join(f))?;
+                parse_annex(&xml)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
 
     let definitions = extract_definitions(&enacting_terms);
     Ok(Act { title, preamble, enacting_terms, annexes, definitions })
@@ -153,6 +157,14 @@ fn discover_files(doc_file: &Path) -> Result<(String, Vec<String>), Error> {
         .collect();
 
     Ok((main_file, annex_files))
+}
+
+/// Returns `true` when the XML document uses `<CONS.ACT>` as its root element,
+/// indicating a consolidated act where annexes are embedded inline.
+fn is_consolidated(xml: &str) -> bool {
+    roxmltree::Document::parse(xml)
+        .map(|d| d.root_element().tag_name().name() == "CONS.ACT")
+        .unwrap_or(false)
 }
 
 /// Reads a file to a `String`, wrapping any I/O error with the file path.

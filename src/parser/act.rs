@@ -19,9 +19,20 @@ pub fn parse_act(xml: &str) -> Result<(String, Preamble, EnactingTerms), Error> 
     let doc = Document::parse(xml)?;
     let root = doc.root_element();
 
-    let title = parse_title(child(root, "TITLE")?)?;
-    let preamble = parse_preamble(child(root, "PREAMBLE")?)?;
-    let enacting_terms = parse_enacting_terms(child(root, "ENACTING.TERMS")?)?;
+    // Consolidated acts use <CONS.ACT> as the root element, with <TITLE>,
+    // <PREAMBLE>, and <ENACTING.TERMS> nested inside <CONS.DOC>.
+    // Regular acts use <ACT> as the root with those elements as direct children.
+    let content = if root.tag_name().name() == "CONS.ACT" {
+        root.children()
+            .find(|n| n.is_element() && n.tag_name().name() == "CONS.DOC")
+            .ok_or(Error::MissingElement("CONS.DOC"))?
+    } else {
+        root
+    };
+
+    let title = parse_title(child(content, "TITLE")?)?;
+    let preamble = parse_preamble(child(content, "PREAMBLE")?)?;
+    let enacting_terms = parse_enacting_terms(child(content, "ENACTING.TERMS")?)?;
 
     Ok((title, preamble, enacting_terms))
 }
@@ -247,6 +258,66 @@ mod tests {
     fn parse_act_missing_title() {
         let result = parse_act("<ACT><PREAMBLE/><ENACTING.TERMS/></ACT>");
         assert!(matches!(result, Err(Error::MissingElement(_))));
+    }
+
+    // ── consolidated act (CONS.ACT) ───────────────────────────────────────────
+
+    #[test]
+    fn parse_cons_act_basic() {
+        let xml = r#"<CONS.ACT>
+            <INFO.CONSLEG/>
+            <INFO.PROD/>
+            <CONS.DOC>
+                <BIB.INSTANCE/>
+                <FAM.COMP/>
+                <TITLE><TI><P>Test Consolidated Regulation</P></TI></TITLE>
+                <PREAMBLE>
+                    <PREAMBLE.INIT><P>THE COUNCIL,</P></PREAMBLE.INIT>
+                    <PREAMBLE.FINAL><P>HAVE ADOPTED:</P></PREAMBLE.FINAL>
+                </PREAMBLE>
+                <ENACTING.TERMS>
+                    <DIVISION>
+                        <TITLE><TI><P>TITLE I</P></TI></TITLE>
+                        <ARTICLE><TI.ART>Article 1</TI.ART><ALINEA>Text.</ALINEA></ARTICLE>
+                    </DIVISION>
+                </ENACTING.TERMS>
+            </CONS.DOC>
+        </CONS.ACT>"#;
+        let (title, preamble, enacting_terms) = parse_act(xml).unwrap();
+        assert_eq!(title, "Test Consolidated Regulation");
+        assert_eq!(preamble.init, "THE COUNCIL,");
+        assert!(preamble.visas.is_empty(), "consolidated preamble has no visas");
+        assert!(preamble.recitals.is_empty(), "consolidated preamble has no recitals");
+        assert_eq!(enacting_terms.chapters.len(), 1);
+    }
+
+    #[test]
+    fn parse_cons_act_toc_is_skipped() {
+        // The <TOC> element inside <ENACTING.TERMS> of a consolidated act must
+        // not be counted as a chapter — only <DIVISION> elements are chapters.
+        let xml = r#"<CONS.ACT>
+            <INFO.CONSLEG/>
+            <CONS.DOC>
+                <TITLE><TI><P>Act</P></TI></TITLE>
+                <PREAMBLE>
+                    <PREAMBLE.INIT><P>Init.</P></PREAMBLE.INIT>
+                    <PREAMBLE.FINAL><P>Final.</P></PREAMBLE.FINAL>
+                </PREAMBLE>
+                <ENACTING.TERMS>
+                    <TOC><TITLE><TI><P>Table of Contents</P></TI></TITLE></TOC>
+                    <DIVISION>
+                        <TITLE><TI><P>TITLE I</P></TI></TITLE>
+                        <ARTICLE><TI.ART>Article 1</TI.ART><ALINEA>Text.</ALINEA></ARTICLE>
+                    </DIVISION>
+                    <DIVISION>
+                        <TITLE><TI><P>TITLE II</P></TI></TITLE>
+                        <ARTICLE><TI.ART>Article 2</TI.ART><ALINEA>Text.</ALINEA></ARTICLE>
+                    </DIVISION>
+                </ENACTING.TERMS>
+            </CONS.DOC>
+        </CONS.ACT>"#;
+        let (_, _, enacting_terms) = parse_act(xml).unwrap();
+        assert_eq!(enacting_terms.chapters.len(), 2, "TOC must not be counted as a chapter");
     }
 
     #[test]

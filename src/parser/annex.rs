@@ -19,8 +19,36 @@ use super::{child, parse_block_children, parse_list_as_subparagraphs};
 /// [`crate::error::Error::MissingElement`] if `<TITLE>` is absent.
 pub fn parse_annex(xml: &str) -> Result<Annex, Error> {
     let doc = Document::parse(xml)?;
-    let root = doc.root_element();
+    parse_annex_node(doc.root_element())
+}
 
+/// Parses all `<CONS.ANNEX>` elements embedded in a `<CONS.ACT>` document,
+/// returning them in document order.
+///
+/// Consolidated acts keep their annexes inline inside `<CONS.DOC>` rather
+/// than as separate files. Each `<CONS.ANNEX>` has the same `<TITLE>` +
+/// `<CONTENTS>` structure as a standalone `<ANNEX>` and is parsed identically.
+///
+/// # Errors
+///
+/// Returns [`crate::error::Error::Xml`] for malformed XML and
+/// [`crate::error::Error::MissingElement`] if `<CONS.DOC>` is absent.
+pub fn parse_cons_annex(xml: &str) -> Result<Vec<Annex>, Error> {
+    let doc = Document::parse(xml)?;
+    let root = doc.root_element();
+    let cons_doc = root
+        .children()
+        .find(|n| n.is_element() && n.tag_name().name() == "CONS.DOC")
+        .ok_or(Error::MissingElement("CONS.DOC"))?;
+    cons_doc
+        .children()
+        .filter(|n| n.is_element() && n.tag_name().name() == "CONS.ANNEX")
+        .map(parse_annex_node)
+        .collect()
+}
+
+/// Parses a single annex node — works for both `<ANNEX>` and `<CONS.ANNEX>`.
+fn parse_annex_node(root: Node) -> Result<Annex, Error> {
     let title_node = child(root, "TITLE")?;
 
     let number = title_node
@@ -217,6 +245,49 @@ mod tests {
     fn parse_annex_missing_title() {
         let result = parse_annex("<ANNEX><CONTENTS/></ANNEX>");
         assert!(matches!(result, Err(crate::error::Error::MissingElement(_))));
+    }
+
+    // ── parse_cons_annex ────────────────────────────────────────────────
+
+    #[test]
+    fn parse_cons_annex_basic() {
+        let xml = r#"<CONS.ACT>
+            <INFO.CONSLEG/>
+            <CONS.DOC>
+                <TITLE><TI><P>Act</P></TI></TITLE>
+                <CONS.ANNEX>
+                    <TITLE><TI><P>ANNEX I</P></TI><STI><P>Subtitle</P></STI></TITLE>
+                    <CONTENTS><P>Some content.</P></CONTENTS>
+                </CONS.ANNEX>
+                <CONS.ANNEX>
+                    <TITLE><TI><P>ANNEX II</P></TI></TITLE>
+                    <CONTENTS>
+                        <GR.SEQ>
+                            <TITLE><TI><P>Part A</P></TI></TITLE>
+                            <P>Content.</P>
+                        </GR.SEQ>
+                    </CONTENTS>
+                </CONS.ANNEX>
+            </CONS.DOC>
+        </CONS.ACT>"#;
+        let annexes = parse_cons_annex(xml).unwrap();
+        assert_eq!(annexes.len(), 2);
+        assert_eq!(annexes[0].number, "ANNEX I");
+        assert_eq!(annexes[0].subtitle.as_deref(), Some("Subtitle"));
+        assert!(matches!(&annexes[0].content, AnnexContent::Paragraphs(_)));
+        assert_eq!(annexes[1].number, "ANNEX II");
+        assert!(matches!(&annexes[1].content, AnnexContent::Sections(s) if s.len() == 1));
+    }
+
+    #[test]
+    fn parse_cons_annex_empty_when_no_cons_annex() {
+        let xml = r#"<CONS.ACT>
+            <CONS.DOC>
+                <TITLE><TI><P>Act</P></TI></TITLE>
+            </CONS.DOC>
+        </CONS.ACT>"#;
+        let annexes = parse_cons_annex(xml).unwrap();
+        assert!(annexes.is_empty());
     }
 
     // ── parse_annex ───────────────────────────────────────────────────────────
