@@ -29,7 +29,7 @@ pub(crate) use citation::extract_citations;
 use roxmltree::Node;
 
 use crate::error::Error;
-use crate::model::{Cell, ListBlock, Row, Subparagraph, Table};
+use crate::model::{Cell, ListBlock, ListType, Row, Subparagraph, Table};
 use text::extract_text;
 
 /// Returns the first direct child element of `node` with the given tag name.
@@ -43,56 +43,58 @@ pub(crate) fn child<'a>(node: Node<'a, 'a>, tag: &'static str) -> Result<Node<'a
         .ok_or(Error::MissingElement(tag))
 }
 
+/// Returns the [`ListType`] encoded in a `<LIST TYPE="...">` attribute, or `None`.
+pub(crate) fn list_type_from(node: Node) -> Option<ListType> {
+    match node.attribute("TYPE")? {
+        "alpha" => Some(ListType::Alpha),
+        "roman" => Some(ListType::Roman),
+        "ARAB"  => Some(ListType::Arab),
+        "DASH"  => Some(ListType::Dash),
+        _       => None,
+    }
+}
+
 /// Converts a `<LIST>` element into a sequence of [`Subparagraph`]s.
 ///
-/// - Simple item (no nested list): → [`Subparagraph::Text`]`{ text, number: Some(number) }`
-/// - NP-wrapped item with a nested `<LIST>`: → [`Subparagraph::List`] carrying
-///   the item number, intro text, and recursively parsed sub-items.
+/// Each `<ITEM>` becomes either a [`Subparagraph::Text`] (simple item) or a
+/// [`Subparagraph::List`] (item with a nested sub-list). Item numbers are
+/// stored as 1-based positions; the display label is recoverable from the
+/// enclosing list's [`ListType`] and the position.
 pub(crate) fn parse_list_as_subparagraphs(node: Node) -> Vec<Subparagraph> {
     node.children()
         .filter(|n| n.is_element() && n.tag_name().name() == "ITEM")
-        .map(|item| {
+        .enumerate()
+        .map(|(i, item)| {
+            let pos = (i + 1) as u32;
             if let Some(np) = item
                 .children()
                 .find(|n| n.is_element() && n.tag_name().name() == "NP")
             {
-                let number = np
-                    .children()
-                    .find(|n| n.is_element() && n.tag_name().name() == "NO.P")
-                    .map(extract_text)
-                    .unwrap_or_default();
                 let text = np
                     .children()
                     .find(|n| n.is_element() && n.tag_name().name() == "TXT")
                     .map(extract_text)
                     .unwrap_or_default();
-                let nested: Vec<Subparagraph> = np
+                let nested_lists: Vec<Node> = np
                     .children()
                     .filter(|n| n.is_element() && n.tag_name().name() == "P")
-                    .flat_map(|p| {
-                        p.children()
-                            .filter(|n| n.is_element() && n.tag_name().name() == "LIST")
-                            .flat_map(parse_list_as_subparagraphs)
-                    })
+                    .flat_map(|p| p.children().filter(|n| n.is_element() && n.tag_name().name() == "LIST"))
                     .collect();
-                if nested.is_empty() {
-                    Subparagraph::Text { text, number: Some(number) }
+                if nested_lists.is_empty() {
+                    Subparagraph::Text { text, number: Some(pos) }
                 } else {
-                    Subparagraph::List(ListBlock { number: Some(number), intro: text, items: nested })
+                    let list_type = nested_lists.first().and_then(|n| list_type_from(*n));
+                    let items = nested_lists.into_iter().flat_map(parse_list_as_subparagraphs).collect();
+                    Subparagraph::List(ListBlock { list_type, number: Some(pos), intro: text, items })
                 }
             } else {
-                let number = item
-                    .children()
-                    .find(|n| n.is_element() && n.tag_name().name() == "NO.P")
-                    .map(extract_text)
-                    .unwrap_or_default();
                 let text = item
                     .children()
                     .filter(|n| n.is_element() && n.tag_name().name() == "P")
                     .map(extract_text)
                     .collect::<Vec<_>>()
                     .join(" ");
-                Subparagraph::Text { text, number: Some(number) }
+                Subparagraph::Text { text, number: Some(pos) }
             }
         })
         .collect()
@@ -189,6 +191,7 @@ pub(crate) fn parse_block_children(node: Node) -> Vec<Subparagraph> {
                     for block in nested_blocks {
                         match block.tag_name().name() {
                             "LIST" => result.push(Subparagraph::List(ListBlock {
+                                list_type: list_type_from(block),
                                 number: None,
                                 intro: String::new(),
                                 items: parse_list_as_subparagraphs(block),
@@ -209,6 +212,7 @@ pub(crate) fn parse_block_children(node: Node) -> Vec<Subparagraph> {
             "LIST" => {
                 let intro = pending.take().unwrap_or_default();
                 result.push(Subparagraph::List(ListBlock {
+                    list_type: list_type_from(child),
                     number: None,
                     intro,
                     items: parse_list_as_subparagraphs(child),
@@ -218,18 +222,20 @@ pub(crate) fn parse_block_children(node: Node) -> Vec<Subparagraph> {
                 if let Some(t) = pending.take() {
                     result.push(Subparagraph::Text { text: t, number: None });
                 }
-                let number = child
+                let number: Option<u32> = child
                     .children()
                     .find(|n| n.is_element() && n.tag_name().name() == "NO.P")
-                    .map(extract_text)
-                    .unwrap_or_default();
+                    .and_then(|n| {
+                        let s = extract_text(n);
+                        s.chars().filter(|c| c.is_ascii_digit()).collect::<String>().parse().ok()
+                    });
                 // <TXT> is the standard body; fall back to the full <NP> text when absent.
                 let text = child
                     .children()
                     .find(|n| n.is_element() && n.tag_name().name() == "TXT")
                     .map(extract_text)
                     .unwrap_or_else(|| extract_text(child));
-                result.push(Subparagraph::Text { text, number: Some(number) });
+                result.push(Subparagraph::Text { text, number });
             }
             "TITLE" => {
                 // Structural title elements are extracted by callers; skip here.

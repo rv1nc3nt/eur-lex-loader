@@ -549,14 +549,14 @@ mod tests {
             Subparagraph::List(lb) => {
                 assert!(lb.intro.contains("prohibited"));
                 assert_eq!(lb.items.len(), 2);
-                assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(a)"));
+                assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
                 match &lb.items[1] {
                     Subparagraph::List(inner) => {
-                        assert_eq!(inner.number.as_deref(), Some("(b)"));
+                        assert_eq!(inner.number, Some(2));
                         assert_eq!(inner.intro, "Practice B:");
                         assert_eq!(inner.items.len(), 2);
-                        assert!(matches!(&inner.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(i)"));
-                        assert!(matches!(&inner.items[1], Subparagraph::Text { number: Some(n), .. } if n == "(ii)"));
+                        assert!(matches!(&inner.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
+                        assert!(matches!(&inner.items[1], Subparagraph::Text { number: Some(n), .. } if *n == 2));
                     }
                     _ => panic!("expected nested List for item (b)"),
                 }
@@ -592,8 +592,8 @@ mod tests {
             Subparagraph::List(lb) => {
                 assert_eq!(lb.intro, "For the purposes of this Regulation:");
                 assert_eq!(lb.items.len(), 2);
-                assert!(matches!(&lb.items[0], Subparagraph::Text { text: t, number: Some(n) } if n == "(1)" && t == "first definition"));
-                assert!(matches!(&lb.items[1], Subparagraph::Text { text: t, number: Some(n) } if n == "(2)" && t == "second definition"));
+                assert!(matches!(&lb.items[0], Subparagraph::Text { text: t, number: Some(n) } if *n == 1 && t == "first definition"));
+                assert!(matches!(&lb.items[1], Subparagraph::Text { text: t, number: Some(n) } if *n == 2 && t == "second definition"));
             }
             _ => panic!("expected List at alineas[0]"),
         }

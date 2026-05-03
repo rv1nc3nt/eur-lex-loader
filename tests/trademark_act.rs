@@ -95,7 +95,7 @@ fn trademark_act_structure() {
     match &p1.alineas[0] {
         Subparagraph::List(lb) => {
             assert_eq!(lb.items.len(), 13, "Article 7 para 1 list should have 13 items");
-            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(a)"));
+            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
         }
         _ => panic!("Article 7 para 1 alineas[0] should be a List"),
     }

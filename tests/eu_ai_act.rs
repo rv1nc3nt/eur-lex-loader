@@ -52,8 +52,8 @@ fn eu_ai_act_structure() {
     match &art3.paragraphs[0].alineas[0] {
         Subparagraph::List(lb) => {
             assert_eq!(lb.items.len(), 68, "Article 3 list should have 68 definition items");
-            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(1)"),
-                "first item should be numbered (1)");
+            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1),
+                "first item should be at position 1");
         }
         _ => panic!("Article 3 alineas[0] should be a List"),
     }
@@ -75,11 +75,11 @@ fn eu_ai_act_structure() {
     match &para1.alineas[0] {
         Subparagraph::List(lb) => {
             assert_eq!(lb.items.len(), 8, "Article 5 list should have 8 items");
-            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(a)"));
+            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
             // Item (c) has 2 sub-items.
             match &lb.items[2] {
                 Subparagraph::List(ListBlock { number, items, .. }) => {
-                    assert_eq!(number.as_deref(), Some("(c)"));
+                    assert_eq!(*number, Some(3));
                     assert_eq!(items.len(), 2, "Article 5 item (c) should have 2 sub-items");
                 }
                 _ => panic!("Article 5 items[2] should be a nested List for (c)"),
@@ -87,7 +87,7 @@ fn eu_ai_act_structure() {
             // Item (h) has 3 sub-items.
             match &lb.items[7] {
                 Subparagraph::List(ListBlock { number, items, .. }) => {
-                    assert_eq!(number.as_deref(), Some("(h)"));
+                    assert_eq!(*number, Some(8));
                     assert_eq!(items.len(), 3, "Article 5 item (h) should have 3 sub-items");
                 }
                 _ => panic!("Article 5 items[7] should be a nested List for (h)"),

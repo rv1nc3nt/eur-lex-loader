@@ -90,8 +90,8 @@ fn dsma_structure() {
     match &p1.alineas[0] {
         Subparagraph::List(lb) => {
             assert_eq!(lb.items.len(), 2);
-            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(a)"));
-            assert!(matches!(&lb.items[1], Subparagraph::Text { number: Some(n), .. } if n == "(b)"));
+            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
+            assert!(matches!(&lb.items[1], Subparagraph::Text { number: Some(n), .. } if *n == 2));
         }
         _ => panic!("Article 5 para 1 alineas[0] should be a List"),
     }

@@ -326,12 +326,14 @@ pub struct Paragraph {
 pub enum Subparagraph {
     /// Plain text, or a single numbered list item.
     ///
-    /// `number` is `Some("(a)")` when this is a numbered entry in a list,
-    /// and absent for plain text blocks.
+    /// `number` is the 1-based position within the enclosing list when this
+    /// is a list item, and absent for plain text blocks. The display label
+    /// ("a", "ii", "3", "—") is recoverable from the parent list's
+    /// [`ListType`] combined with this position.
     Text {
         text: String,
         #[serde(skip_serializing_if = "Option::is_none")]
-        number: Option<String>,
+        number: Option<u32>,
     },
     /// A list group: optional item label (present when this list is itself a
     /// numbered entry in a parent list), intro text, and the list items.
@@ -376,15 +378,33 @@ pub struct Table {
     pub row_count: usize,
 }
 
+/// The numbering style of a [`ListBlock`].
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ListType {
+    /// Alphabetic items: (a), (b), (c)…
+    Alpha,
+    /// Roman numeral items: (i), (ii), (iii)…
+    Roman,
+    /// Arabic numeral items: (1), (2), (3)…
+    Arab,
+    /// Dash items: —
+    Dash,
+}
+
 /// A list: optional item label, intro text, and items.
 ///
-/// `number` is `Some("(c)")` when this list is itself a numbered item inside a
-/// parent list; `None` for top-level lists.
+/// `number` is the 1-based position of this list within its parent list when
+/// it is itself a numbered item; `None` for top-level lists.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct ListBlock {
-    /// Item label in a parent list, e.g. `"(c)"`. Omitted from JSON when absent.
+    /// Numbering style of the list items. Omitted from JSON when absent.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub number: Option<String>,
+    pub list_type: Option<ListType>,
+    /// 1-based position in the parent list when this block is itself a list
+    /// item. Omitted from JSON when absent (top-level list).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub number: Option<u32>,
     /// The text that introduces the list (may be empty).
     pub intro: String,
     /// The items of the list, each itself a [`Subparagraph`].

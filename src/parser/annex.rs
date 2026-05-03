@@ -9,7 +9,7 @@ use roxmltree::{Document, Node};
 
 use crate::error::Error;
 use crate::model::*;
-use super::{child, extract_citations, parse_block_children, parse_list_as_subparagraphs, parse_single_tbl, parse_table};
+use super::{child, extract_citations, list_type_from, parse_block_children, parse_list_as_subparagraphs, parse_single_tbl, parse_table};
 use super::text::extract_text;
 
 /// Parses a Formex annex XML string (`<ANNEX>` root) into an [`Annex`].
@@ -145,6 +145,7 @@ fn parse_annex_paragraphs(node: Node) -> Vec<Paragraph> {
                     for block in nested_blocks {
                         match block.tag_name().name() {
                             "LIST" => pending_alineas.push(Subparagraph::List(ListBlock {
+                                list_type: list_type_from(block),
                                 number: None,
                                 intro: String::new(),
                                 items: parse_list_as_subparagraphs(block),
@@ -165,6 +166,7 @@ fn parse_annex_paragraphs(node: Node) -> Vec<Paragraph> {
             "LIST" => {
                 let intro = pending_intro.take().unwrap_or_default();
                 pending_alineas.push(Subparagraph::List(ListBlock {
+                    list_type: list_type_from(elem),
                     number: None,
                     intro,
                     items: parse_list_as_subparagraphs(elem),
@@ -215,24 +217,22 @@ fn np_to_paragraph(node: Node) -> Paragraph {
         .map(extract_text)
         .unwrap_or_default();
 
-    let nested: Vec<Subparagraph> = node
+    let nested_lists: Vec<Node> = node
         .children()
         .filter(|n| n.is_element() && n.tag_name().name() == "P")
-        .flat_map(|p| {
-            p.children()
-                .filter(|n| n.is_element() && n.tag_name().name() == "LIST")
-                .flat_map(parse_list_as_subparagraphs)
-        })
+        .flat_map(|p| p.children().filter(|n| n.is_element() && n.tag_name().name() == "LIST"))
         .collect();
 
-    let alineas = if nested.is_empty() {
+    let alineas = if nested_lists.is_empty() {
         if txt.is_empty() {
             vec![]
         } else {
             vec![Subparagraph::Text { text: txt, number: None }]
         }
     } else {
-        vec![Subparagraph::List(ListBlock { number: None, intro: txt, items: nested })]
+        let list_type = nested_lists.first().and_then(|n| list_type_from(*n));
+        let items = nested_lists.into_iter().flat_map(parse_list_as_subparagraphs).collect();
+        vec![Subparagraph::List(ListBlock { list_type, number: None, intro: txt, items })]
     };
 
     let citations = extract_citations(node);

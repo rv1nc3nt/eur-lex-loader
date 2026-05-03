@@ -92,9 +92,9 @@ fn dsa_structure() {
     match &p2.alineas[0] {
         Subparagraph::List(lb) => {
             assert_eq!(lb.items.len(), 3, "para 2 list should have 3 items");
-            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if n == "(a)"));
-            assert!(matches!(&lb.items[1], Subparagraph::Text { number: Some(n), .. } if n == "(b)"));
-            assert!(matches!(&lb.items[2], Subparagraph::Text { number: Some(n), .. } if n == "(c)"));
+            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
+            assert!(matches!(&lb.items[1], Subparagraph::Text { number: Some(n), .. } if *n == 2));
+            assert!(matches!(&lb.items[2], Subparagraph::Text { number: Some(n), .. } if *n == 3));
         }
         _ => panic!("Article 1 para 2 alineas[0] should be a List"),
     }
