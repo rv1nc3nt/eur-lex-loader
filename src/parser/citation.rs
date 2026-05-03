@@ -24,6 +24,7 @@ static RE_SUFFIX: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
+/// Converts a matched regex capture string to the corresponding [`CitedActType`].
 fn to_act_type(s: &str) -> CitedActType {
     match s {
         "Regulation" => CitedActType::Regulation,
@@ -39,6 +40,7 @@ fn text_without_notes(node: Node) -> String {
     buf.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// Recursively collects text from `node`'s subtree, skipping `<NOTE>` elements entirely.
 fn collect_text_skip_notes(node: Node, buf: &mut String) {
     if node.is_element() && node.tag_name().name() == "NOTE" {
         return;
@@ -76,10 +78,15 @@ fn find_oj_ref(node: Node) -> Option<OjRef> {
     None
 }
 
+/// Internal result of a single citation regex match within a text string.
 struct CitMatch {
+    /// Byte offset of the match start, used to pick the earlier match when both patterns fire.
     pos: usize,
+    /// Regulation, Directive, or Decision.
     act_type: CitedActType,
+    /// Jurisdictional regime code (e.g. `"EU"`, `"EC"`, `"EEC"`).
     regime: String,
+    /// Year/number identifier (e.g. `"2022/2065"`, `"207/2009"`).
     number: String,
 }
 
@@ -131,6 +138,7 @@ fn collect_notes<'a>(node: Node<'a, 'a>) -> Vec<Node<'a, 'a>> {
     notes
 }
 
+/// Recursive implementation of [`collect_notes`], descending into non-`NOTE` children.
 fn collect_notes_rec<'a>(node: Node<'a, 'a>, notes: &mut Vec<Node<'a, 'a>>) {
     for child in node.children() {
         if child.is_element() {
@@ -191,19 +199,23 @@ pub(crate) fn extract_citations(node: Node) -> Vec<Citation> {
 mod tests {
     use super::*;
 
+    /// Parses a raw XML string into a `roxmltree::Document`, panicking on error.
     fn parse(xml: &str) -> roxmltree::Document<'_> {
         roxmltree::Document::parse(xml).unwrap()
     }
 
+    /// Parses `xml` and extracts citations from the root element.
     fn citations(xml: &str) -> Vec<Citation> {
         let doc = parse(xml);
         extract_citations(doc.root_element())
     }
 
+    /// Constructs an [`OjRef`] from its four fields for use in assertions.
     fn oj(collection: &str, number: &str, date: &str, page: u32) -> OjRef {
         OjRef { collection: collection.into(), number: number.into(), date: date.into(), page }
     }
 
+    /// Constructs a [`Citation`] with `regime` set, for use in assertions.
     fn cit(act_type: CitedActType, regime: &str, number: &str, oj_ref: Option<OjRef>) -> Citation {
         Citation { act_type, regime: Some(regime.into()), number: number.into(), oj_ref }
     }
@@ -212,6 +224,7 @@ mod tests {
     // Source: data/32017R1001/L_2017154EN.01000101.xml, recital (1)
 
     #[test]
+    /// NOTE containing `(EC) No 207/2009` prefix-style citation with a `REF.DOC.OJ` element.
     fn note_ec_no_style_with_oj_ref() {
         let xml = r#"<CONSID><NP><NO.P>(1)</NO.P><TXT>Council Regulation (EC) No 207/2009<NOTE NOTE.ID="E0002" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>Council Regulation (EC) No 207/2009 of <DATE ISO="20090226">26 February 2009</DATE> on the European Union trade mark (<REF.DOC.OJ COLL="L" DATE.PUB="20090324" NO.OJ="078" PAGE.FIRST="1">OJ L 78, 24.3.2009, p. 1</REF.DOC.OJ>).</P></NOTE> has been substantially amended.</TXT></NP></CONSID>"#;
         let result = citations(xml);
@@ -226,6 +239,7 @@ mod tests {
     // Source: data/32024R1689/L_202401689EN.000101.fmx.xml, recital (11)
 
     #[test]
+    /// NOTE containing modern `(EU) 2022/2065` year/number style citation with a `REF.DOC.OJ` element.
     fn note_eu_modern_style_with_oj_ref() {
         let xml = r#"<CONSID><NP><NO.P>(11)</NO.P><TXT>Regulation (EU) 2022/2065 of the European Parliament and of the Council<NOTE NOTE.ID="E0015" NUMBERING.CONTINUED="YES"><P>Regulation (EU) 2022/2065 of the European Parliament and of the Council of <DATE ISO="20221019">19 October 2022</DATE> on a Single Market For Digital Services and amending Directive 2000/31/EC (Digital Services Act) (<REF.DOC.OJ COLL="L" DATE.PUB="20221027" NO.OJ="277" PAGE.FIRST="1">OJ L 277, 27.10.2022, p. 1</REF.DOC.OJ>).</P></NOTE>.</TXT></NP></CONSID>"#;
         let result = citations(xml);
@@ -240,6 +254,7 @@ mod tests {
     // Source: data/32017R1001/L_2017154EN.01000101.xml, recital (16) — NOTE only
 
     #[test]
+    /// NOTE with `(EU) No 608/2013` style; only the first citation is extracted, ignoring the "repealing" mention.
     fn note_eu_no_style_with_oj_ref() {
         let xml = r#"<CONSID><NP><NO.P>(16)</NO.P><TXT>x<NOTE NOTE.ID="E0008" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>Regulation (EU) No 608/2013 of the European Parliament and of the Council of <DATE ISO="20130612">12 June 2013</DATE> concerning customs enforcement of intellectual property rights and repealing Council Regulation (EC) No 1383/2003 (<REF.DOC.OJ COLL="L" DATE.PUB="20130629" NO.OJ="181" PAGE.FIRST="15">OJ L 181, 29.6.2013, p. 15</REF.DOC.OJ>).</P></NOTE>.</TXT></NP></CONSID>"#;
         let result = citations(xml);
@@ -257,6 +272,7 @@ mod tests {
     // Source: data/32017R1001/L_2017154EN.01000101.xml, recital (18)
 
     #[test]
+    /// Inline `(EU) No 608/2013` prefix-style citation with no NOTE and therefore no OJ ref.
     fn inline_citation_eu_no_style_no_oj_ref() {
         let xml = r#"<CONSID><NP><NO.P>(18)</NO.P><TXT>Article 28 of Regulation (EU) No 608/2013 provides that a right holder is to be liable for damages towards the holder of the goods where, inter alia, the goods in question are subsequently found not to infringe an intellectual property right.</TXT></NP></CONSID>"#;
         let result = citations(xml);
@@ -268,6 +284,7 @@ mod tests {
     // Source: data/32024R1689/L_202401689EN.000101.fmx.xml, recital (14)
 
     #[test]
+    /// Three distinct inline citations in one element, all without NOTEs, yields three entries with no OJ ref.
     fn inline_multiple_citations_no_notes() {
         let xml = r#"<CONSID><NP><NO.P>(14)</NO.P><TXT>The notion of biometric data used in this Regulation should be interpreted in light of the notion of biometric data as defined in Article 4, point (14) of Regulation (EU) 2016/679, Article 3, point (18) of Regulation (EU) 2018/1725 and Article 3, point (13) of Directive (EU) 2016/680.</TXT></NP></CONSID>"#;
         let result = citations(xml);
@@ -281,6 +298,7 @@ mod tests {
     // Source: data/32017R1001/L_2017154EN.01000101.xml, recital (16)
 
     #[test]
+    /// When the same act appears both inline and in a NOTE, the NOTE entry (with OJ ref) wins and only one entry remains.
     fn dedup_note_beats_inline() {
         // "(EU) No 608/2013" appears both in TXT (inline) and in the NOTE with OJ ref.
         let xml = r#"<CONSID><NP><NO.P>(16)</NO.P><TXT>In performing customs controls, the customs authorities should make use of the powers and procedures laid down in Regulation (EU) No 608/2013 of the European Parliament and the Council<NOTE NOTE.ID="E0008" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>Regulation (EU) No 608/2013 of the European Parliament and of the Council of <DATE ISO="20130612">12 June 2013</DATE> concerning customs enforcement of intellectual property rights and repealing Council Regulation (EC) No 1383/2003 (<REF.DOC.OJ COLL="L" DATE.PUB="20130629" NO.OJ="181" PAGE.FIRST="15">OJ L 181, 29.6.2013, p. 15</REF.DOC.OJ>).</P></NOTE>, also at the request of the right holders.</TXT></NP></CONSID>"#;
@@ -294,6 +312,7 @@ mod tests {
     // Source: data/32017R1001/L_2017154EN.01000101.xml, recital (2), third NOTE
 
     #[test]
+    /// Suffix-regime `89/104/EEC` style NOTE is recognised and its OJ ref is captured.
     fn old_eec_suffix_style() {
         let xml = r#"<CONSID><NP><NO.P>(2)</NO.P><TXT>x<NOTE NOTE.ID="E0005" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>First Council Directive 89/104/EEC of <DATE ISO="19881221">21 December 1988</DATE> to approximate the laws of the Member States relating to trade marks (<REF.DOC.OJ COLL="L" DATE.PUB="19890211" NO.OJ="040" PAGE.FIRST="1">OJ L 40, 11.2.1989, p. 1</REF.DOC.OJ>).</P></NOTE>.</TXT></NP></CONSID>"#;
         let result = citations(xml);
@@ -309,6 +328,7 @@ mod tests {
     // Source: data/32017R1001/L_2017154EN.01000101.xml, recital (2), fourth NOTE
 
     #[test]
+    /// Suffix-regime `2008/95/EC` style NOTE is recognised and its OJ ref is captured.
     fn ec_suffix_style() {
         let xml = r#"<CONSID><NP><NO.P>(2)</NO.P><TXT>x<NOTE NOTE.ID="E0006" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>Directive 2008/95/EC of the European Parliament and of the Council of <DATE ISO="20081022">22 October 2008</DATE> to approximate the laws of the Member States relating to trade marks (<REF.DOC.OJ COLL="L" DATE.PUB="20081108" NO.OJ="299" PAGE.FIRST="25">OJ L 299, 8.11.2008, p. 25</REF.DOC.OJ>).</P></NOTE>.</TXT></NP></CONSID>"#;
         let result = citations(xml);
@@ -324,6 +344,7 @@ mod tests {
     // Source: data/32017R1001/L_2017154EN.01000101.xml, recital (2)
 
     #[test]
+    /// Three NOTEs in one recital each contribute one citation; an additional inline mention is also captured.
     fn multiple_notes_in_one_recital() {
         let xml = r#"<CONSID><NP><NO.P>(2)</NO.P><TXT>Council Regulation (EC) No 40/94<NOTE NOTE.ID="E0004" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>Council Regulation (EC) No 40/94 of <DATE ISO="19931220">20 December 1993</DATE> on the Community trade mark (<REF.DOC.OJ COLL="L" DATE.PUB="19940114" NO.OJ="011" PAGE.FIRST="1">OJ L 11, 14.1.1994, p. 1</REF.DOC.OJ>).</P></NOTE>, which was codified in 2009 as Regulation (EC) No 207/2009, created a system of trade mark protection specific to the Union which provided for the protection of trade marks at the level of the Union, in parallel to the protection of trade marks available at the level of the Member States in accordance with the national trade mark systems, harmonised by Council Directive 89/104/EEC<NOTE NOTE.ID="E0005" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>First Council Directive 89/104/EEC of <DATE ISO="19881221">21 December 1988</DATE> to approximate the laws of the Member States relating to trade marks (<REF.DOC.OJ COLL="L" DATE.PUB="19890211" NO.OJ="040" PAGE.FIRST="1">OJ L 40, 11.2.1989, p. 1</REF.DOC.OJ>).</P></NOTE>, which was codified as Directive 2008/95/EC of the European Parliament and of the Council<NOTE NOTE.ID="E0006" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>Directive 2008/95/EC of the European Parliament and of the Council of <DATE ISO="20081022">22 October 2008</DATE> to approximate the laws of the Member States relating to trade marks (<REF.DOC.OJ COLL="L" DATE.PUB="20081108" NO.OJ="299" PAGE.FIRST="25">OJ L 299, 8.11.2008, p. 25</REF.DOC.OJ>).</P></NOTE>.</TXT></NP></CONSID>"#;
         let result = citations(xml);
@@ -339,6 +360,7 @@ mod tests {
     // Source: data/32024R1689/L_202401689EN.000101.fmx.xml, recital (10)
 
     #[test]
+    /// Four NOTEs in one recital each yield a citation with an OJ ref, including mixed prefix and suffix styles.
     fn four_notes_in_one_recital() {
         let xml = r#"<CONSID><NP><NO.P>(10)</NO.P><TXT>The fundamental right to the protection of personal data is safeguarded in particular by Regulations (EU) 2016/679<NOTE NOTE.ID="E0011" NUMBERING.CONTINUED="YES"><P>Regulation (EU) 2016/679 of the European Parliament and of the Council of <DATE ISO="20160427">27 April 2016</DATE> on the protection of natural persons with regard to the processing of personal data and on the free movement of such data, and repealing Directive 95/46/EC (General Data Protection Regulation) (<REF.DOC.OJ COLL="L" DATE.PUB="20160504" NO.OJ="119" PAGE.FIRST="1">OJ L 119, 4.5.2016, p. 1</REF.DOC.OJ>).</P></NOTE> and (EU) 2018/1725<NOTE NOTE.ID="E0012" NUMBERING.CONTINUED="YES"><P>Regulation (EU) 2018/1725 of the European Parliament and of the Council of <DATE ISO="20181023">23 October 2018</DATE> on the protection of natural persons with regard to the processing of personal data by the Union institutions, bodies, offices and agencies and on the free movement of such data, and repealing Regulation (EC) No 45/2001 and Decision No 1247/2002/EC (<REF.DOC.OJ COLL="L" DATE.PUB="20181121" NO.OJ="295" PAGE.FIRST="39">OJ L 295, 21.11.2018, p. 39</REF.DOC.OJ>).</P></NOTE> of the European Parliament and of the Council and Directive (EU) 2016/680 of the European Parliament and of the Council<NOTE NOTE.ID="E0013" NUMBERING.CONTINUED="YES"><P>Directive (EU) 2016/680 of the European Parliament and of the Council of <DATE ISO="20160427">27 April 2016</DATE> on the protection of natural persons with regard to the processing of personal data by competent authorities for the purposes of the prevention, investigation, detection or prosecution of criminal offences or the execution of criminal penalties, and on the free movement of such data, and repealing Council Framework Decision 2008/977/JHA (<REF.DOC.OJ COLL="L" DATE.PUB="20160504" NO.OJ="119" PAGE.FIRST="89">OJ L 119, 4.5.2016, p. 89</REF.DOC.OJ>).</P></NOTE>. Directive 2002/58/EC of the European Parliament and of the Council<NOTE NOTE.ID="E0014" NUMBERING.CONTINUED="YES"><P>Directive 2002/58/EC of the European Parliament and of the Council of <DATE ISO="20020712">12 July 2002</DATE> concerning the processing of personal data and the protection of privacy in the electronic communications sector (Directive on privacy and electronic communications) (<REF.DOC.OJ COLL="L" DATE.PUB="20020731" NO.OJ="201" PAGE.FIRST="37">OJ L 201, 31.7.2002, p. 37</REF.DOC.OJ>).</P></NOTE> additionally protects private life and the confidentiality of communication.</TXT></NP></CONSID>"#;
         let result = citations(xml);
@@ -352,6 +374,7 @@ mod tests {
     // Source: data/32017R1001/L_2017154EN.01000101.xml, recital (1), second NOTE
 
     #[test]
+    /// A NOTE whose text does not contain a recognisable act citation produces no results.
     fn note_without_act_citation_is_ignored() {
         let xml = r#"<CONSID><NP><NO.P>(1)</NO.P><TXT>amended several times<NOTE NOTE.ID="E0003" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>See Annex II.</P></NOTE>.</TXT></NP></CONSID>"#;
         assert!(citations(xml).is_empty());
@@ -361,6 +384,7 @@ mod tests {
     // Source: data/32017R1001/L_2017154EN.01000101.xml, third visa
 
     #[test]
+    /// A NOTE containing only procedural text (dates, positions) with no act reference is ignored.
     fn note_with_procedural_text_is_ignored() {
         let xml = r#"<VISA>Acting in accordance with the ordinary legislative procedure<NOTE NOTE.ID="E0001" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>Position of the European Parliament of <DATE ISO="20170427">27 April 2017</DATE> (not yet published in the Official Journal) and decision of the Council of <DATE ISO="20170522">22 May 2017</DATE>.</P></NOTE>,</VISA>"#;
         assert!(citations(xml).is_empty());
@@ -370,6 +394,7 @@ mod tests {
     // Constructed test — no real data file required.
 
     #[test]
+    /// An element with plain prose and no act references returns an empty citation list.
     fn element_with_no_citations() {
         let xml = r#"<CONSID><NP><NO.P>(5)</NO.P><TXT>This Regulation applies without prejudice to existing procedural rules.</TXT></NP></CONSID>"#;
         assert!(citations(xml).is_empty());
@@ -379,6 +404,7 @@ mod tests {
     // Source: data/32024R1689/L_202401689EN.000101.fmx.xml — amending article paragraph
 
     #[test]
+    /// Citation in an article `<PARAG>` (not a recital) with a NOTE and OJ ref is extracted correctly.
     fn article_paragraph_with_note_and_oj_ref() {
         let xml = r#"<PARAG><NO.PARAG>1.</NO.PARAG><ALINEA><P>In Annex I to Directive (EU) 2020/1828 of the European Parliament and of the Council<NOTE NOTE.ID="E0066" NUMBERING.CONTINUED="YES"><P>Directive (EU) 2020/1828 of the European Parliament and of the Council of <DATE ISO="20201125">25 November 2020</DATE> on representative actions for the protection of the collective interests of consumers and repealing Directive 2009/22/EC (<REF.DOC.OJ COLL="L" DATE.PUB="20201204" NO.OJ="409" PAGE.FIRST="1">OJ L 409, 4.12.2020, p. 1</REF.DOC.OJ>).</P></NOTE>, the following point is added:</P></ALINEA></PARAG>"#;
         let result = citations(xml);
@@ -394,6 +420,7 @@ mod tests {
     // Constructed test matching the GR.SEQ pattern used in annex parsing.
 
     #[test]
+    /// Citations inside a `<GR.SEQ>` annex section element are extracted correctly.
     fn annex_section_gr_seq_level() {
         let xml = r#"<GR.SEQ><TITLE><TI><P>Part A</P></TI></TITLE><P>As listed in Regulation (EU) 2024/1689<NOTE NOTE.ID="X1" NUMBERING.CONTINUED="YES"><P>Regulation (EU) 2024/1689 (<REF.DOC.OJ COLL="L" DATE.PUB="20240712" NO.OJ="1689" PAGE.FIRST="1">OJ L 1689, 12.7.2024, p. 1</REF.DOC.OJ>).</P></NOTE>.</P></GR.SEQ>"#;
         let result = citations(xml);

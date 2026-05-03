@@ -1,3 +1,10 @@
+//! File discovery and assembly of a complete [`crate::model::Act`] from a
+//! Formex publication directory.
+//!
+//! The entry point is [`load_act`], which locates the `*.doc.xml` registry,
+//! parses bibliographic metadata and the ordered file list, reads each Formex
+//! file, and delegates to the [`crate::parser`] module to produce typed structs.
+
 use std::fs;
 use std::path::Path;
 
@@ -261,17 +268,20 @@ mod tests {
     use super::extract_term;
 
     #[test]
+    /// A string opening and closing with Unicode typographic quotes returns the text between them.
     fn extract_term_basic() {
         let text = "\u{201C}AI system\u{201D} means a machine-based system";
         assert_eq!(extract_term(text), Some("AI system"));
     }
 
     #[test]
+    /// A string with no opening quote returns `None`.
     fn extract_term_no_quotes_returns_none() {
         assert_eq!(extract_term("plain text without quotes"), None);
     }
 
     #[test]
+    /// A string with an opening quote but no closing quote returns `None`.
     fn extract_term_only_opening_quote_returns_none() {
         assert_eq!(extract_term("\u{201C}unclosed term"), None);
     }

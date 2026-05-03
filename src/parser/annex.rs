@@ -1,3 +1,10 @@
+//! Parser for Formex annex XML files (`<ANNEX>` root) and for inline
+//! consolidated annexes (`<CONS.ANNEX>` elements inside `<CONS.ACT>`).
+//!
+//! [`parse_annex`] handles standalone annex files; [`parse_cons_annex`] extracts
+//! all `<CONS.ANNEX>` elements from a consolidated act document. Both delegate
+//! to the shared helper [`parse_annex_node`].
+
 use roxmltree::{Document, Node};
 
 use crate::error::Error;
@@ -236,6 +243,8 @@ fn np_to_paragraph(node: Node) -> Paragraph {
 mod tests {
     use super::*;
 
+    /// Wraps `contents_inner` in a minimal `<ANNEX>` document and returns the
+    /// parsed sections, panicking if content is not `AnnexContent::Sections`.
     fn parse_sections(contents_inner: &str) -> Vec<AnnexSection> {
         let xml = format!(
             r#"<ANNEX><TITLE><TI><P>ANNEX X</P></TI></TITLE><CONTENTS>{}</CONTENTS></ANNEX>"#,
@@ -247,6 +256,8 @@ mod tests {
         }
     }
 
+    /// Wraps `contents_inner` in a minimal `<ANNEX>` document and returns the
+    /// parsed paragraphs, panicking if content is not `AnnexContent::Paragraphs`.
     fn parse_paragraphs(contents_inner: &str) -> Vec<Paragraph> {
         let xml = format!(
             r#"<ANNEX><TITLE><TI><P>ANNEX X</P></TI></TITLE><CONTENTS>{}</CONTENTS></ANNEX>"#,
@@ -261,6 +272,7 @@ mod tests {
     // ── parse_annex errors ────────────────────────────────────────────────────
 
     #[test]
+    /// An `<ANNEX>` with no `<TITLE>` element returns a `MissingElement` error.
     fn parse_annex_missing_title() {
         let result = parse_annex("<ANNEX><CONTENTS/></ANNEX>");
         assert!(matches!(result, Err(crate::error::Error::MissingElement(_))));
@@ -269,6 +281,8 @@ mod tests {
     // ── parse_cons_annex ────────────────────────────────────────────────
 
     #[test]
+    /// Two `<CONS.ANNEX>` elements inside `<CONS.DOC>` are each parsed: the first
+    /// as `Paragraphs` mode, the second (containing `<GR.SEQ>`) as `Sections` mode.
     fn parse_cons_annex_basic() {
         let xml = r#"<CONS.ACT>
             <INFO.CONSLEG/>
@@ -299,6 +313,7 @@ mod tests {
     }
 
     #[test]
+    /// A `<CONS.DOC>` with no `<CONS.ANNEX>` children returns an empty vec.
     fn parse_cons_annex_empty_when_no_cons_annex() {
         let xml = r#"<CONS.ACT>
             <CONS.DOC>
@@ -312,6 +327,8 @@ mod tests {
     // ── parse_annex ───────────────────────────────────────────────────────────
 
     #[test]
+    /// `<TI>` inside `<TITLE>` becomes the annex `number` field and `<STI>` becomes
+    /// `subtitle`.
     fn annex_title_and_subtitle() {
         let xml = r#"<ANNEX>
             <TITLE>
@@ -326,6 +343,7 @@ mod tests {
     }
 
     #[test]
+    /// An `<ANNEX>` with no `<STI>` element produces `subtitle: None`.
     fn annex_no_subtitle() {
         let xml = r#"<ANNEX>
             <TITLE><TI><P>ANNEX II</P></TI></TITLE>
@@ -338,6 +356,8 @@ mod tests {
     // ── Sections mode ─────────────────────────────────────────────────────────
 
     #[test]
+    /// Two `<GR.SEQ>` elements produce two `AnnexSection`s with the correct titles
+    /// and one text alinea each.
     fn gr_seq_produces_annex_sections() {
         let xml = r#"<GR.SEQ>
             <TITLE><TI><P>Part A</P></TI></TITLE>
@@ -356,6 +376,8 @@ mod tests {
     }
 
     #[test]
+    /// A `<GR.SEQ>` containing a `<P>` intro and a `<LIST>` collapses into a single
+    /// `Subparagraph::List` with the intro text and two items.
     fn gr_seq_with_list_inside() {
         let xml = r#"<GR.SEQ>
             <TITLE><TI><P>Section I</P></TI></TITLE>
@@ -380,6 +402,8 @@ mod tests {
     // ── Paragraphs mode ───────────────────────────────────────────────────────
 
     #[test]
+    /// A bare `<P>` with no surrounding `<NP>` becomes an anonymous paragraph
+    /// (`number: None`) with a single `Text` alinea.
     fn plain_paragraphs_become_anonymous_paragraph() {
         let paras = parse_paragraphs("<P>Some text.</P>");
         assert_eq!(paras.len(), 1);
@@ -390,12 +414,15 @@ mod tests {
     }
 
     #[test]
+    /// A `<P>` containing only whitespace produces no paragraphs (empty result).
     fn empty_contents_produces_no_paragraphs() {
         let paras = parse_paragraphs("<P>   </P>");
         assert_eq!(paras.len(), 0);
     }
 
     #[test]
+    /// A single `<NP>` with `<NO.P>` and `<TXT>` becomes a numbered paragraph with
+    /// one `Text` alinea.
     fn np_becomes_numbered_paragraph() {
         let paras = parse_paragraphs("<NP><NO.P>1.</NO.P><TXT>First item.</TXT></NP>");
         assert_eq!(paras.len(), 1);
@@ -406,6 +433,7 @@ mod tests {
     }
 
     #[test]
+    /// Two consecutive `<NP>` elements each become a separate numbered paragraph.
     fn multiple_nps_become_separate_paragraphs() {
         let xml = r#"<NP><NO.P>1.</NO.P><TXT>First.</TXT></NP>
                      <NP><NO.P>2.</NO.P><TXT>Second.</TXT></NP>"#;
@@ -416,6 +444,8 @@ mod tests {
     }
 
     #[test]
+    /// An `<NP>` whose `<TXT>` is followed by a `<P><LIST>` produces a single
+    /// `Subparagraph::List` alinea with the `<TXT>` as intro and the list items.
     fn np_with_nested_list_becomes_list_alinea() {
         let xml = r#"<NP>
             <NO.P>1.</NO.P>
@@ -439,6 +469,8 @@ mod tests {
     }
 
     #[test]
+    /// A `<P>` immediately followed by a sibling `<LIST>` has its text promoted to
+    /// the `intro` of the resulting `Subparagraph::List`.
     fn p_before_list_becomes_intro() {
         let xml = r#"<P>Items:</P>
                      <LIST TYPE="DASH">
@@ -458,6 +490,8 @@ mod tests {
     }
 
     #[test]
+    /// A `<P>` that directly wraps a `<LIST>` (no plain text siblings) produces a
+    /// `Subparagraph::List` with an empty intro.
     fn p_wrapping_list_becomes_list_block() {
         let xml = r#"<P><LIST TYPE="ARAB">
             <ITEM><NP><NO.P>1.</NO.P><TXT>First.</TXT></NP></ITEM>
@@ -474,8 +508,9 @@ mod tests {
     }
 
     #[test]
+    /// A plain `<P>` before the first `<NP>` is flushed as its own anonymous
+    /// paragraph; each subsequent `<NP>` becomes a separate numbered paragraph.
     fn mixed_p_and_np_groups_correctly() {
-        // A plain <P> before the first <NP> becomes its own anonymous paragraph.
         let xml = r#"<P>Preamble text.</P>
                      <NP><NO.P>1.</NO.P><TXT>Item one.</TXT></NP>
                      <NP><NO.P>2.</NO.P><TXT>Item two.</TXT></NP>"#;

@@ -1,3 +1,10 @@
+//! Parser for Formex act XML files (`<ACT>` and `<CONS.ACT>` roots).
+//!
+//! The two public functions, [`parse_regular_act`] and [`parse_consolidated_act`],
+//! each parse one `.fmx.xml` file and return `(title, preamble, enacting_terms)`.
+//! The caller ([`crate::loader`]) assembles those parts with annex data into a
+//! complete [`crate::model::Act`].
+
 use roxmltree::{Document, Node};
 
 use crate::error::Error;
@@ -275,6 +282,7 @@ fn expand_alinea(node: Node) -> Vec<Subparagraph> {
 mod tests {
     use super::*;
 
+    /// Parses a raw XML string into a `roxmltree::Document`, panicking on error.
     fn doc(xml: &str) -> roxmltree::Document<'_> {
         roxmltree::Document::parse(xml).unwrap()
     }
@@ -282,6 +290,7 @@ mod tests {
     // ── parse_act errors ──────────────────────────────────────────────────────
 
     #[test]
+    /// An `<ACT>` without a `<TITLE>` element returns a `MissingElement` error.
     fn parse_act_missing_title() {
         let result = parse_regular_act("<ACT><PREAMBLE/><ENACTING.TERMS/></ACT>");
         assert!(matches!(result, Err(Error::MissingElement(_))));
@@ -290,6 +299,7 @@ mod tests {
     // ── consolidated act (CONS.ACT) ───────────────────────────────────────────
 
     #[test]
+    /// A minimal `<CONS.ACT>` with one `<DIVISION>` is parsed into title, preamble, and enacting terms.
     fn parse_cons_act_basic() {
         let xml = r#"<CONS.ACT>
             <INFO.CONSLEG/>
@@ -318,6 +328,7 @@ mod tests {
     }
 
     #[test]
+    /// A `<TOC>` element inside `<ENACTING.TERMS>` is ignored; only `<DIVISION>` elements become chapters.
     fn parse_cons_act_toc_is_skipped() {
         // The <TOC> element inside <ENACTING.TERMS> of a consolidated act must
         // not be counted as a chapter — only <DIVISION> elements are chapters.
@@ -347,6 +358,7 @@ mod tests {
     }
 
     #[test]
+    /// An `<ACT>` without a `<PREAMBLE>` element returns a `MissingElement` error.
     fn parse_act_missing_preamble() {
         let result = parse_regular_act(
             "<ACT><TITLE><TI><P>Title</P></TI></TITLE><ENACTING.TERMS/></ACT>",
@@ -355,6 +367,7 @@ mod tests {
     }
 
     #[test]
+    /// An `<ACT>` without an `<ENACTING.TERMS>` element returns a `MissingElement` error.
     fn parse_act_missing_enacting_terms() {
         let result = parse_regular_act(
             "<ACT><TITLE><TI><P>Title</P></TI></TITLE><PREAMBLE/></ACT>",
@@ -365,6 +378,7 @@ mod tests {
     // ── title ─────────────────────────────────────────────────────────────────
 
     #[test]
+    /// Multiple `<P>` children inside `<TI>` are joined with a space into a single title string.
     fn title_joins_p_elements() {
         let xml = "<TITLE><TI><P>Act</P><P>of 1 January</P></TI></TITLE>";
         let d = doc(xml);
@@ -375,6 +389,7 @@ mod tests {
     // ── preamble ──────────────────────────────────────────────────────────────
 
     #[test]
+    /// Preamble with two `<VISA>` and three `<CONSID>` elements produces the correct counts and texts.
     fn preamble_counts_visas_and_recitals() {
         let xml = r#"<PREAMBLE>
             <PREAMBLE.INIT><P>THE COUNCIL,</P></PREAMBLE.INIT>
@@ -398,6 +413,7 @@ mod tests {
     }
 
     #[test]
+    /// A `<CONSID>` with `<NO.P>` and `<TXT>` produces the correct recital number and text.
     fn recital_number_and_text() {
         let xml = "<CONSID><NP><NO.P>(42)</NO.P><TXT>Some text.</TXT></NP></CONSID>";
         let d = doc(xml);
@@ -407,6 +423,8 @@ mod tests {
     }
 
     #[test]
+    /// A `<CONSID>` with no `<NP>` wrapper falls back to rendering the whole element
+    /// as plain text with an empty number string.
     fn recital_without_np_falls_back_to_full_text() {
         let xml = "<CONSID><P>Unnumbered recital.</P></CONSID>";
         let d = doc(xml);
@@ -418,6 +436,8 @@ mod tests {
     // ── chapters and sections ─────────────────────────────────────────────────
 
     #[test]
+    /// A `<DIVISION>` with only `<ARTICLE>` children (no nested `<DIVISION>`) produces
+    /// `ChapterContents::Articles`.
     fn chapter_with_direct_articles() {
         let xml = r#"<DIVISION>
             <TITLE><TI><P>CHAPTER I</P></TI></TITLE>
@@ -434,6 +454,8 @@ mod tests {
     }
 
     #[test]
+    /// A `<DIVISION>` whose children are themselves `<DIVISION>` elements produces
+    /// `ChapterContents::Sections`, each section carrying its own articles.
     fn chapter_with_sections() {
         let xml = r#"<DIVISION>
             <TITLE><TI><P>CHAPTER III</P></TI></TITLE>
@@ -461,6 +483,8 @@ mod tests {
     // ── articles ──────────────────────────────────────────────────────────────
 
     #[test]
+    /// An `<ARTICLE>` with `<PARAG>` wrappers, a `<TI.ART>` number, and a
+    /// `<STI.ART>` subtitle is parsed into the correct counts and field values.
     fn article_with_paragraphs() {
         let xml = r#"<ARTICLE>
             <TI.ART>Article 6</TI.ART>
@@ -493,9 +517,10 @@ mod tests {
     }
 
     #[test]
+    /// A `<LIST>` inside an `<ALINEA>` must produce a `Subparagraph::List` (not flat
+    /// text), including correct nesting for sub-lists — matching Article 5's
+    /// prohibited-practices list structure.
     fn alinea_list_items_are_content_blocks() {
-        // A <LIST> inside an <ALINEA> must produce a Subparagraph::List, not flat
-        // text — matching Article 5's prohibited-practices list structure.
         let xml = r#"<ARTICLE>
             <TI.ART>Article 5</TI.ART>
             <PARAG>
@@ -545,10 +570,10 @@ mod tests {
     }
 
     #[test]
+    /// An `<ALINEA>` containing a `<P>` intro followed by a `<LIST>` must produce a
+    /// single `Subparagraph::List` with the intro set and items populated —
+    /// matching Article 3 of the EU AI Act (definitions article).
     fn alinea_list_expands_to_individual_alineas() {
-        // An <ALINEA> with a <P> intro and a <LIST> must produce a single
-        // Subparagraph::List with the intro set and items populated —
-        // matching Article 3 of the EU AI Act (definitions).
         let xml = r#"<ARTICLE>
             <TI.ART>Article 3</TI.ART>
             <STI.ART><P>Definitions</P></STI.ART>
