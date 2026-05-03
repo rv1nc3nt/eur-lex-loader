@@ -128,7 +128,8 @@ pub struct Paragraph {
     pub number: Option<String>,
     /// Subparagraphs of this paragraph. A plain alinea becomes a
     /// [`Subparagraph::Text`]; an alinea that contains a `<LIST>` (with its
-    /// optional intro `<P>`) becomes a [`Subparagraph::List`].
+    /// optional intro `<P>`) becomes a [`Subparagraph::List`]; a `<GR.TBL>`
+    /// or bare `<TBL>` element becomes a [`Subparagraph::Table`].
     pub alineas: Vec<Subparagraph>,
 }
 
@@ -151,6 +152,44 @@ pub enum Subparagraph {
     /// A list group: optional item label (present when this list is itself a
     /// numbered entry in a parent list), intro text, and the list items.
     List(ListBlock),
+    /// A table parsed from a `<GR.TBL>` element.
+    Table(Table),
+}
+
+/// A single cell within a [`Row`] (`<CELL>`).
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct Cell {
+    /// Plain-text content of the cell. Empty string for `<IE/>` (idem/empty marker).
+    pub text: String,
+    /// `true` when the cell carries `TYPE="HEADER"`.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_header: bool,
+}
+
+/// A row within a [`Table`] (`<ROW>`).
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct Row {
+    /// The cells in this row.
+    pub cells: Vec<Cell>,
+    /// Number of cells (convenience field matching `cells.len()`).
+    pub cell_count: usize,
+    /// `true` when the row carries `TYPE="HEADER"`.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_header: bool,
+}
+
+/// A table parsed from a `<TBL>` element inside `<GR.TBL>`.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct Table {
+    /// Number of columns declared in the `COLS` attribute of `<TBL>`.
+    pub col_count: usize,
+    /// Optional table title (from `<TITLE><TI>`). Omitted from JSON when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// The rows of the table body (`<CORPUS><ROW>`).
+    pub rows: Vec<Row>,
+    /// Number of rows (convenience field matching `rows.len()`).
+    pub row_count: usize,
 }
 
 /// A list: optional item label, intro text, and items.

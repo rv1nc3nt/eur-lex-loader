@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::ChapterContents;
+use eur_lex_loader::model::{AnnexContent, ChapterContents, Subparagraph};
 
 #[test]
 fn reach_regulation_structure() {
@@ -48,4 +48,15 @@ fn reach_regulation_structure() {
             annex.number
         );
     }
+
+    // ANNEX IV is a flat table (TBL directly inside CONTENTS) — verify a Table is parsed.
+    let annex_iv = reg.annexes.iter().find(|a| a.number.contains("ANNEX IV"))
+        .expect("ANNEX IV not found");
+    let has_table = match &annex_iv.content {
+        AnnexContent::Paragraphs(paras) => paras.iter()
+            .any(|p| p.alineas.iter().any(|a| matches!(a, Subparagraph::Table(_)))),
+        AnnexContent::Sections(secs) => secs.iter()
+            .any(|s| s.alineas.iter().any(|a| matches!(a, Subparagraph::Table(_)))),
+    };
+    assert!(has_table, "ANNEX IV should contain at least one Table subparagraph");
 }

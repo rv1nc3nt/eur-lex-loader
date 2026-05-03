@@ -3,7 +3,7 @@ use roxmltree::{Document, Node};
 use crate::error::Error;
 use crate::model::*;
 use crate::text::extract_text;
-use super::{child, parse_block_children, parse_list_as_subparagraphs};
+use super::{child, parse_block_children, parse_list_as_subparagraphs, parse_single_tbl, parse_table};
 
 /// Parses a Formex annex XML string (`<ANNEX>` root) into an [`Annex`].
 ///
@@ -124,20 +124,25 @@ fn parse_annex_paragraphs(node: Node) -> Vec<Paragraph> {
                 result.push(np_to_paragraph(elem));
             }
             "P" => {
-                let nested_lists: Vec<_> = elem
+                let nested_blocks: Vec<_> = elem
                     .children()
-                    .filter(|n| n.is_element() && n.tag_name().name() == "LIST")
+                    .filter(|n| {
+                        n.is_element() && matches!(n.tag_name().name(), "LIST" | "TBL")
+                    })
                     .collect();
-                if !nested_lists.is_empty() {
+                if !nested_blocks.is_empty() {
                     if let Some(t) = pending_intro.take() {
                         pending_alineas.push(Subparagraph::Text { text: t, number: None });
                     }
-                    for list in nested_lists {
-                        pending_alineas.push(Subparagraph::List(ListBlock {
-                            number: None,
-                            intro: String::new(),
-                            items: parse_list_as_subparagraphs(list),
-                        }));
+                    for block in nested_blocks {
+                        match block.tag_name().name() {
+                            "LIST" => pending_alineas.push(Subparagraph::List(ListBlock {
+                                number: None,
+                                intro: String::new(),
+                                items: parse_list_as_subparagraphs(block),
+                            })),
+                            _ => pending_alineas.push(parse_single_tbl(block)),
+                        }
                     }
                 } else {
                     if let Some(t) = pending_intro.take() {
@@ -158,6 +163,18 @@ fn parse_annex_paragraphs(node: Node) -> Vec<Paragraph> {
                 }));
             }
             "TITLE" => {}
+            "GR.TBL" => {
+                if let Some(t) = pending_intro.take() {
+                    pending_alineas.push(Subparagraph::Text { text: t, number: None });
+                }
+                pending_alineas.extend(parse_table(elem));
+            }
+            "TBL" => {
+                if let Some(t) = pending_intro.take() {
+                    pending_alineas.push(Subparagraph::Text { text: t, number: None });
+                }
+                pending_alineas.push(parse_single_tbl(elem));
+            }
             _ => {
                 if let Some(t) = pending_intro.take() {
                     pending_alineas.push(Subparagraph::Text { text: t, number: None });

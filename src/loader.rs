@@ -89,6 +89,7 @@ fn collect_definition_items(sub: &Subparagraph, map: &mut HashMap<String, String
                 map.insert(term.to_owned(), text.clone());
             }
         }
+        Subparagraph::Table(_) => {}
     }
 }
 

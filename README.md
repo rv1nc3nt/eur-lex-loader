@@ -209,6 +209,26 @@ The tool outputs a single JSON object with the following shape:
                                         { "Text": { "text": "…", "number": "(i)" } }
                                       ] } }
                         ]
+                    } },
+                    // A table parsed from <GR.TBL> or a bare <TBL> element:
+                    { "Table": {
+                        "col_count": 3,
+                        "title": "Correlation table",   // omitted when absent
+                        "row_count": 2,
+                        "rows": [
+                          { "is_header": true, "cell_count": 3,
+                            "cells": [
+                              { "text": "Old directive", "is_header": true },
+                              { "text": "New directive", "is_header": true },
+                              { "text": "Remarks",       "is_header": true }
+                            ] },
+                          { "cell_count": 3,
+                            "cells": [
+                              { "text": "Article 1" },
+                              { "text": "Article 3" },
+                              { "text": "" }
+                            ] }
+                        ]
                     } }
                   ]
                 }
@@ -233,16 +253,20 @@ The tool outputs a single JSON object with the following shape:
               { "Text": { "text": "…" } },
               { "List": { "intro": "…", "items": [
                   { "Text": { "text": "…", "number": "(a)" } }
-              ] } }
+              ] } },
+              { "Table": { "col_count": 2, "row_count": 1,
+                           "rows": [ { "cell_count": 2,
+                                       "cells": [ { "text": "…" }, { "text": "…" } ] } ] } }
             ]
           }
         ]
       }
-      // Annexes with flat numbered items or plain text use Paragraphs:
+      // Annexes with flat numbered items, plain text, or tables use Paragraphs:
       // "content": {
       //   "Paragraphs": [
       //     { "number": "1.", "alineas": [ { "Text": { "text": "…" } } ] },
-      //     { "number": "2.", "alineas": [ { "List": { "intro": "…", "items": [ "…" ] } } ] }
+      //     { "number": "2.", "alineas": [ { "List": { "intro": "…", "items": [ "…" ] } } ] },
+      //     { "number": null, "alineas": [ { "Table": { "col_count": 3, "row_count": 5, "rows": [ "…" ] } } ] }
       //   ]
       // }
     }
@@ -260,7 +284,9 @@ The tool outputs a single JSON object with the following shape:
 ```
 
 `number` is omitted from the JSON when absent (plain text blocks and top-level
-lists). `definitions` is omitted when the act has no Definitions article.
+lists). `title` is omitted from `Table` when the `<TBL>` element has no
+`<TITLE>`. `is_header` is omitted from `Row` and `Cell` when `false`.
+`definitions` is omitted when the act has no Definitions article.
 
 ---
 

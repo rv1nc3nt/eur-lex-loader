@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{AnnexContent, ChapterContents};
+use eur_lex_loader::model::{AnnexContent, ChapterContents, Subparagraph};
 
 #[test]
 fn consumer_directive_structure() {
@@ -58,4 +58,12 @@ fn consumer_directive_structure() {
         matches!(&act.annexes[1].content, AnnexContent::Paragraphs(_)),
         "ANNEX II should be Paragraphs (no GR.SEQ)"
     );
+
+    // Annex II contains the GR.TBL correlation table → at least one Table subparagraph.
+    if let AnnexContent::Paragraphs(paras) = &act.annexes[1].content {
+        let has_table = paras
+            .iter()
+            .any(|p| p.alineas.iter().any(|a| matches!(a, Subparagraph::Table(_))));
+        assert!(has_table, "ANNEX II should contain at least one Table subparagraph");
+    }
 }
