@@ -307,10 +307,11 @@ pub struct Paragraph {
     /// Paragraph number, e.g. `"1."` (from `<NO.PARAG>`). `None` for articles
     /// that use bare `<ALINEA>` elements without a `<PARAG>` wrapper.
     pub number: Option<String>,
-    /// Subparagraphs of this paragraph. A plain alinea becomes a
+    /// Content blocks of this paragraph. A plain alinea becomes a
     /// [`Subparagraph::Text`]; an alinea that contains a `<LIST>` (with its
-    /// optional intro `<P>`) becomes a [`Subparagraph::List`]; a `<GR.TBL>`
-    /// or bare `<TBL>` element becomes a [`Subparagraph::Table`].
+    /// optional intro `<P>`) becomes a [`Subparagraph::List`] whose items are
+    /// [`Item`] values with 1-based positions; a `<GR.TBL>` or bare `<TBL>`
+    /// element becomes a [`Subparagraph::Table`].
     pub alineas: Vec<Subparagraph>,
     /// Structured citations to other EU acts found in this paragraph.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

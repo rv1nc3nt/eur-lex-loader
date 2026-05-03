@@ -293,14 +293,19 @@ an original or a consolidated version.
                     { "Text": { "text": "The purpose of this Regulation …" } },
                     // A <P> intro + <LIST> collapsed into a single List block:
                     { "List": {
+                        "list_type": "alpha",
                         "intro": "The following practices shall be prohibited:",
                         "items": [
-                          { "Text": { "text": "…", "number": "(a)" } },
+                          // Simple item: number is its 1-based position in the list.
+                          { "number": 1, "content": { "Text": "…" } },
                           // An item that itself has a nested list:
-                          { "List": { "number": "(b)", "intro": "…",
-                                      "items": [
-                                        { "Text": { "text": "…", "number": "(i)" } }
-                                      ] } }
+                          { "number": 2, "content": { "List": {
+                              "list_type": "roman",
+                              "intro": "…",
+                              "items": [
+                                { "number": 1, "content": { "Text": "…" } }
+                              ]
+                          } } }
                         ]
                     } },
                     // A table parsed from <GR.TBL> or a bare <TBL> element:
@@ -343,9 +348,9 @@ an original or a consolidated version.
           {
             "title": "Part A",
             "alineas": [
-              { "Text": { "text": "…" } },
-              { "List": { "intro": "…", "items": [
-                  { "Text": { "text": "…", "number": "(a)" } }
+              { "Text": "…" },
+              { "List": { "list_type": "alpha", "intro": "…", "items": [
+                  { "number": 1, "content": { "Text": "…" } }
               ] } },
               { "Table": { "col_count": 2, "row_count": 1,
                            "rows": [ { "cell_count": 2,
@@ -357,8 +362,8 @@ an original or a consolidated version.
       // Annexes with flat numbered items, plain text, or tables use Paragraphs:
       // "content": {
       //   "Paragraphs": [
-      //     { "number": "1.", "alineas": [ { "Text": { "text": "…" } } ] },
-      //     { "number": "2.", "alineas": [ { "List": { "intro": "…", "items": [ "…" ] } } ] },
+      //     { "number": "1.", "alineas": [ { "Text": "…" } ] },
+      //     { "number": "2.", "alineas": [ { "List": { "intro": "…", "items": [ { "number": 1, "content": { "Text": "…" } } ] } } ] },
       //     { "number": null, "alineas": [ { "Table": { "col_count": 3, "row_count": 5, "rows": [ "…" ] } } ] }
       //   ]
       // }
@@ -376,8 +381,8 @@ an original or a consolidated version.
 }
 ```
 
-`number` is omitted from the JSON when absent (plain text blocks and top-level
-lists). `title` is omitted from `Table` when the `<TBL>` element has no
+`list_type` is omitted from `List` when the `<LIST>` element carries no `TYPE`
+attribute. `title` is omitted from `Table` when the `<TBL>` element has no
 `<TITLE>`. `is_header` is omitted from `Row` and `Cell` when `false`.
 `definitions` is omitted when the act has no Definitions article.
 
