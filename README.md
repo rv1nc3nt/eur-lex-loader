@@ -299,14 +299,16 @@ cargo test
 ```
 
 Unit tests live alongside their source modules. Integration tests validate the
-full parse of four different EU legislative acts against known structural counts:
+full parse of six different EU legislative acts against known structural counts:
 
-| File | Act | Articles | Recitals | Definitions |
-|---|---|---|---|---|
-| `tests/eu_ai_act.rs` | EU AI Act (32024R1689) | 113 | 180 | 68 |
-| `tests/dsa.rs` | Digital Services Act (32022R2065) | 93 | 156 | 27 |
-| `tests/dsma.rs` | Copyright in the Digital Single Market (32019L0790) | 32 | 86 | 6 |
-| `tests/trademark_act.rs` | EU Trade Mark Regulation (32017R1001) | 212 | 48 | — |
+| File | Act | Format | Articles | Recitals | Definitions |
+|---|---|---|---|---|---|
+| `tests/eu_ai_act.rs` | EU AI Act (32024R1689) | Original | 113 | 180 | 68 |
+| `tests/dsa.rs` | Digital Services Act (32022R2065) | Original | 93 | 156 | 27 |
+| `tests/dsma.rs` | Copyright in the Digital Single Market (32019L0790) | Original | 32 | 86 | 6 |
+| `tests/trademark_act.rs` | EU Trade Mark Regulation (32017R1001) | Original | 212 | 48 | — |
+| `tests/reach.rs` | REACH Regulation (32006R1907) | Consolidated | 141 | — | — |
+| `tests/consumer_directive.rs` | Consumer Rights Directive (32011L0083) | Consolidated | 36 | — | — |
 
 ---
 
