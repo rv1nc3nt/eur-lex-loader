@@ -11,10 +11,12 @@ It provides two command-line tools and a library:
 - **Library** — exposes `load_act` and the full data model for embedding in Rust
   applications. The public API is documented with `cargo doc --open`.
 
-The library extracts the full document structure: title, preamble (legal bases
-and recitals), enacting terms (chapters, sections, articles, and nested
-lists), tables, annexes, and a flat definitions map when the act contains a
-Definitions article. Both original and consolidated acts are supported.
+The library extracts the full document structure: bibliographic metadata (CELEX
+number, document date, legal value, Official Journal reference, authors),
+title, preamble (legal bases and recitals), enacting terms (chapters, sections,
+articles, and nested lists), tables, annexes, and a flat definitions map when
+the act contains a Definitions article. Both original and consolidated acts are
+supported.
 
 ---
 
@@ -187,6 +189,19 @@ an original or a consolidated version.
 
 ```jsonc
 {
+  "metadata": {
+    "celex": "32024R1689",
+    "document_date": "20240613",
+    "legal_value": "REG",
+    "language": "EN",
+    "authors": ["PE", "CS"],
+    "eea_relevant": true,
+    "official_journal": { "collection": "L", "number": "1689", "date": "20240712", "language": "EN" },
+    "page_first": 1,
+    "page_last": 144,
+    "page_total": 144
+  },
+
   "title": "Regulation (EU) 2024/1689 …",
 
   "preamble": {
@@ -209,6 +224,8 @@ an original or a consolidated version.
 
 ```jsonc
 {
+  "metadata": { "celex": "32006R1907", "legal_value": "REG", "…": "…" },
+
   "title": "Regulation (EC) No 1907/2006 …",
 
   "preamble": {
@@ -225,6 +242,26 @@ an original or a consolidated version.
 
 ```jsonc
 {
+  "metadata": {
+    "celex": "32024R1689",          // CELEX identifier
+    "document_date": "20240613",    // signing/adoption date, YYYYMMDD
+    "legal_value": "REG",           // "REG" | "DIR" | "DEC" | …
+    "language": "EN",               // document language code
+    "authors": ["PE", "CS"],        // institutional authors
+    "eea_relevant": true,           // EEA relevance flag
+    "official_journal": {
+      "collection": "L",            // OJ series ("L" or "C")
+      "number": "1689",             // OJ issue number
+      "date": "20240712",           // publication date, YYYYMMDD
+      "language": "EN"              // language edition
+    },
+    "page_first": 1,
+    "page_last": 144,
+    "page_total": 144,
+    "prod_id": "20240610001",       // internal production ID (absent in older acts)
+    "fin_id": "789012"              // internal final ID (absent in older acts)
+  },
+
   "title": "Regulation (EU) 2024/1689 …",
 
   "preamble": {
@@ -343,6 +380,10 @@ an original or a consolidated version.
 lists). `title` is omitted from `Table` when the `<TBL>` element has no
 `<TITLE>`. `is_header` is omitted from `Row` and `Cell` when `false`.
 `definitions` is omitted when the act has no Definitions article.
+
+In `metadata`, all fields except `eea_relevant` are optional and omitted from
+the JSON when absent. `prod_id` and `fin_id` are absent in older Formex files.
+`authors` is omitted when empty.
 
 ---
 

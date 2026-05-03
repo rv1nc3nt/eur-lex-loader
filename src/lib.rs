@@ -20,6 +20,9 @@
 //!
 //! // Convenience methods work on both Regular and Consolidated variants:
 //! println!("{}", act.title());
+//! if let Some(celex) = &act.metadata().celex {
+//!     println!("CELEX: {celex}");
+//! }
 //! for chapter in &act.enacting_terms().chapters {
 //!     println!("{}", chapter.title);
 //! }
@@ -39,7 +42,9 @@
 //! # Data flow
 //!
 //! 1. Scan the directory for a `*.doc.fmx.xml` registry file.
-//! 2. Parse the registry to discover the act file and annex file paths.
+//! 2. Parse the registry to extract bibliographic [`Metadata`] (CELEX number,
+//!    document date, legal value, language, authors, Official Journal reference,
+//!    page range) and discover the act file and annex file paths.
 //! 3. For regular acts, parse the main file into a [`model::Preamble`] and
 //!    [`model::EnactingTerms`], then parse each separate annex file.
 //! 4. For consolidated acts, parse the single file into a
@@ -61,4 +66,4 @@ pub mod parser;
 pub mod text;
 
 pub use loader::load_act;
-pub use model::{Act, RegularAct, ConsolidatedAct, ConsolidatedPreamble};
+pub use model::{Act, RegularAct, ConsolidatedAct, ConsolidatedPreamble, Metadata, OfficialJournal};

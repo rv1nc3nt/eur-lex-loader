@@ -6,7 +6,7 @@ use roxmltree::Document;
 use std::collections::HashMap;
 
 use crate::error::Error;
-use crate::model::{Act, ConsolidatedAct, RegularAct, ChapterContents, ListBlock, Subparagraph};
+use crate::model::{Act, ConsolidatedAct, Metadata, OfficialJournal, RegularAct, ChapterContents, ListBlock, Subparagraph};
 use crate::parser::{parse_regular_act, parse_consolidated_act, parse_annex, parse_cons_annex};
 
 /// Loads a complete act from a directory of Formex `.fmx.xml` files.
@@ -23,7 +23,7 @@ use crate::parser::{parse_regular_act, parse_consolidated_act, parse_annex, pars
 /// [`Error::MissingElement`] if a required Formex element is absent.
 pub fn load_act(data_dir: &Path) -> Result<Act, Error> {
     let doc_file = find_doc_file(data_dir)?;
-    let (main_file, annex_files) = discover_files(&doc_file)?;
+    let (metadata, main_file, annex_files) = parse_doc_file(&doc_file)?;
 
     let main_xml = read_file(&data_dir.join(&main_file))?;
 
@@ -31,7 +31,7 @@ pub fn load_act(data_dir: &Path) -> Result<Act, Error> {
         let (title, preamble, enacting_terms) = parse_consolidated_act(&main_xml)?;
         let annexes = parse_cons_annex(&main_xml)?;
         let definitions = extract_definitions(&enacting_terms);
-        Ok(Act::Consolidated(ConsolidatedAct { title, preamble, enacting_terms, annexes, definitions }))
+        Ok(Act::Consolidated(ConsolidatedAct { metadata, title, preamble, enacting_terms, annexes, definitions }))
     } else {
         let (title, preamble, enacting_terms) = parse_regular_act(&main_xml)?;
         let annexes = annex_files
@@ -42,7 +42,7 @@ pub fn load_act(data_dir: &Path) -> Result<Act, Error> {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let definitions = extract_definitions(&enacting_terms);
-        Ok(Act::Regular(RegularAct { title, preamble, enacting_terms, annexes, definitions }))
+        Ok(Act::Regular(RegularAct { metadata, title, preamble, enacting_terms, annexes, definitions }))
     }
 }
 
@@ -122,12 +122,12 @@ fn find_doc_file(data_dir: &Path) -> Result<std::path::PathBuf, Error> {
     Err(Error::MissingElement("*.doc.fmx.xml or *.doc.xml"))
 }
 
-/// Parses a `.doc.fmx.xml` registry to obtain the ordered list of files.
+/// Parses a `.doc.xml` registry to obtain the file list and bibliographic metadata.
 ///
-/// Returns `(main_act_filename, vec_of_annex_filenames)`. The annex list
-/// preserves the `NO.SEQ` order declared in the registry rather than relying
-/// on filesystem sort order.
-fn discover_files(doc_file: &Path) -> Result<(String, Vec<String>), Error> {
+/// Returns `(metadata, main_act_filename, vec_of_annex_filenames)`. The annex
+/// list preserves the `NO.SEQ` order declared in the registry rather than
+/// relying on filesystem sort order.
+fn parse_doc_file(doc_file: &Path) -> Result<(Metadata, String, Vec<String>), Error> {
     let xml = read_file(doc_file)?;
     let document = Document::parse(&xml)?;
     let root = document.root_element();
@@ -137,13 +137,15 @@ fn discover_files(doc_file: &Path) -> Result<(String, Vec<String>), Error> {
         .find(|n| n.is_element() && n.tag_name().name() == "FMX")
         .ok_or(Error::MissingElement("FMX"))?;
 
-    let main_file = fmx
+    // ── file discovery ────────────────────────────────────────────────────────
+    let doc_main = fmx
         .children()
         .find(|n| n.is_element() && n.tag_name().name() == "DOC.MAIN.PUB")
-        .and_then(|n| {
-            n.children()
-                .find(|c| c.is_element() && c.tag_name().name() == "REF.PHYS")
-        })
+        .ok_or(Error::MissingElement("DOC.MAIN.PUB"))?;
+
+    let main_file = doc_main
+        .children()
+        .find(|c| c.is_element() && c.tag_name().name() == "REF.PHYS")
         .and_then(|n| n.attribute("FILE"))
         .ok_or(Error::MissingElement("DOC.MAIN.PUB/REF.PHYS[@FILE]"))?
         .to_string();
@@ -159,7 +161,83 @@ fn discover_files(doc_file: &Path) -> Result<(String, Vec<String>), Error> {
         })
         .collect();
 
-    Ok((main_file, annex_files))
+    // ── BIB.DOC ───────────────────────────────────────────────────────────────
+    let mut prod_id: Option<String> = None;
+    let mut fin_id: Option<String> = None;
+    let mut authors: Vec<String> = Vec::new();
+    let mut eea_relevant = false;
+
+    if let Some(bib) = fmx.children().find(|n| n.is_element() && n.tag_name().name() == "BIB.DOC") {
+        for child in bib.children().filter(|n| n.is_element()) {
+            match child.tag_name().name() {
+                "PROD.ID" => prod_id = Some(child.text().unwrap_or_default().to_string()),
+                "FIN.ID"  => fin_id  = Some(child.text().unwrap_or_default().to_string()),
+                "AUTHOR"  => { authors.push(child.text().unwrap_or_default().to_string()); }
+                "EEA"     => eea_relevant = true,
+                _         => {}
+            }
+        }
+    }
+
+    // ── PUBLICATION.REF ───────────────────────────────────────────────────────
+    let official_journal = fmx
+        .children()
+        .find(|n| n.is_element() && n.tag_name().name() == "PUBLICATION.REF")
+        .map(|pub_ref| {
+            let mut collection = String::new();
+            let mut number = String::new();
+            let mut date = String::new();
+            let mut language = String::new();
+            for child in pub_ref.children().filter(|n| n.is_element()) {
+                match child.tag_name().name() {
+                    "COLL"  => collection = child.text().unwrap_or_default().to_string(),
+                    "NO.OJ" => number     = child.text().unwrap_or_default().to_string(),
+                    "DATE"  => date       = child.attribute("ISO").unwrap_or_default().to_string(),
+                    "LG.OJ" => language   = child.text().unwrap_or_default().to_string(),
+                    _ => {}
+                }
+            }
+            OfficialJournal { collection, number, date, language }
+        });
+
+    // ── DOC.MAIN.PUB metadata ─────────────────────────────────────────────────
+    let mut celex: Option<String> = None;
+    let mut document_date: Option<String> = None;
+    let mut legal_value: Option<String> = None;
+    let mut language: Option<String> = None;
+    let mut page_first: Option<u32> = None;
+    let mut page_last: Option<u32> = None;
+    let mut page_total: Option<u32> = None;
+
+    for child in doc_main.children().filter(|n| n.is_element()) {
+        match child.tag_name().name() {
+            "NO.CELEX"    => celex        = Some(child.text().unwrap_or_default().to_string()),
+            "DATE"        => document_date = Some(child.attribute("ISO").unwrap_or_default().to_string()),
+            "LEGAL.VALUE" => legal_value  = Some(child.text().unwrap_or_default().to_string()),
+            "LG.DOC"      => language     = Some(child.text().unwrap_or_default().to_string()),
+            "PAGE.FIRST"  => page_first   = child.text().and_then(|t| t.parse().ok()),
+            "PAGE.LAST"   => page_last    = child.text().and_then(|t| t.parse().ok()),
+            "PAGE.TOTAL"  => page_total   = child.text().and_then(|t| t.parse().ok()),
+            _ => {}
+        }
+    }
+
+    let metadata = Metadata {
+        celex,
+        document_date,
+        legal_value,
+        language,
+        authors,
+        eea_relevant,
+        official_journal,
+        page_first,
+        page_last,
+        page_total,
+        prod_id,
+        fin_id,
+    };
+
+    Ok((metadata, main_file, annex_files))
 }
 
 /// Returns `true` when the XML document uses `<CONS.ACT>` as its root element,

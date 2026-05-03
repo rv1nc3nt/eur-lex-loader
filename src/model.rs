@@ -2,6 +2,59 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize}; // Deserialize needed for Subparagraph/ListBlock in tests
 
+/// Bibliographic metadata extracted from the `.doc.xml` registry file.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Metadata {
+    /// CELEX identifier, e.g. `"32017R1001"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub celex: Option<String>,
+    /// Act signing/adoption date in `YYYYMMDD` form.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document_date: Option<String>,
+    /// Formex legal-value code: `"REG"`, `"DIR"`, `"DEC"`, etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub legal_value: Option<String>,
+    /// Document language code, e.g. `"EN"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    /// Institutional authors, e.g. `["PE", "CS"]`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub authors: Vec<String>,
+    /// `true` when the `<EEA/>` relevance flag is present.
+    pub eea_relevant: bool,
+    /// Official Journal publication reference.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub official_journal: Option<OfficialJournal>,
+    /// First page in the Official Journal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_first: Option<u32>,
+    /// Last page in the Official Journal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_last: Option<u32>,
+    /// Total page count.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_total: Option<u32>,
+    /// Production ID (absent in older format files).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prod_id: Option<String>,
+    /// Final ID (absent in older format files).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fin_id: Option<String>,
+}
+
+/// Official Journal publication reference.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct OfficialJournal {
+    /// Series, e.g. `"L"` or `"C"`.
+    pub collection: String,
+    /// Issue number, e.g. `"154"`.
+    pub number: String,
+    /// Publication date in `YYYYMMDD` form.
+    pub date: String,
+    /// Language edition, e.g. `"EN"`.
+    pub language: String,
+}
+
 /// A parsed EU legislative act.
 ///
 /// The two variants reflect the two Formex publication formats:
@@ -26,6 +79,14 @@ pub enum Act {
 }
 
 impl Act {
+    /// Bibliographic metadata from the `.doc.xml` registry.
+    pub fn metadata(&self) -> &Metadata {
+        match self {
+            Act::Regular(a) => &a.metadata,
+            Act::Consolidated(a) => &a.metadata,
+        }
+    }
+
     /// The full title of the act.
     pub fn title(&self) -> &str {
         match self {
@@ -62,6 +123,8 @@ impl Act {
 /// A complete original EU act (`<ACT>` root), with a full preamble.
 #[derive(Serialize)]
 pub struct RegularAct {
+    /// Bibliographic metadata from the `.doc.xml` registry.
+    pub metadata: Metadata,
     /// The full title of the act, e.g. `"Regulation (EU) 2024/1689 …"`.
     pub title: String,
     /// The preamble: opening formula, legal bases, numbered recitals, enacting formula.
@@ -81,6 +144,8 @@ pub struct RegularAct {
 /// you need those fields.
 #[derive(Serialize)]
 pub struct ConsolidatedAct {
+    /// Bibliographic metadata from the `.doc.xml` registry.
+    pub metadata: Metadata,
     /// The full title of the act.
     pub title: String,
     /// The slim preamble: opening formula and enacting formula only.
