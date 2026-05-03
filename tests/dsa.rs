@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{Act, ChapterContents, Subparagraph};
+use eur_lex_loader::model::{Act, ChapterContents, Item, ItemContent, Subparagraph};
 
 #[test]
 fn dsa_structure() {
@@ -77,7 +77,7 @@ fn dsa_structure() {
         "Article 1 para 1 should have 1 alinea block"
     );
     assert!(
-        matches!(&p1.alineas[0], Subparagraph::Text { number: None, .. }),
+        matches!(&p1.alineas[0], Subparagraph::Text(_)),
         "Article 1 para 1 alineas[0] should be a plain Text"
     );
 
@@ -92,9 +92,9 @@ fn dsa_structure() {
     match &p2.alineas[0] {
         Subparagraph::List(lb) => {
             assert_eq!(lb.items.len(), 3, "para 2 list should have 3 items");
-            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
-            assert!(matches!(&lb.items[1], Subparagraph::Text { number: Some(n), .. } if *n == 2));
-            assert!(matches!(&lb.items[2], Subparagraph::Text { number: Some(n), .. } if *n == 3));
+            assert!(matches!(&lb.items[0], Item { number: 1, content: ItemContent::Text(_) }));
+            assert!(matches!(&lb.items[1], Item { number: 2, content: ItemContent::Text(_) }));
+            assert!(matches!(&lb.items[2], Item { number: 3, content: ItemContent::Text(_) }));
         }
         _ => panic!("Article 1 para 2 alineas[0] should be a List"),
     }

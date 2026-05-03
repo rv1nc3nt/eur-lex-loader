@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, CitedActType, Citation, ListBlock, OjRef, Subparagraph};
+use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, CitedActType, Citation, Item, ItemContent, ListBlock, OjRef, Subparagraph};
 
 #[test]
 fn eu_ai_act_structure() {
@@ -52,7 +52,7 @@ fn eu_ai_act_structure() {
     match &art3.paragraphs[0].alineas[0] {
         Subparagraph::List(lb) => {
             assert_eq!(lb.items.len(), 68, "Article 3 list should have 68 definition items");
-            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1),
+            assert!(matches!(&lb.items[0], Item { number: 1, content: ItemContent::Text(_) }),
                 "first item should be at position 1");
         }
         _ => panic!("Article 3 alineas[0] should be a List"),
@@ -70,25 +70,23 @@ fn eu_ai_act_structure() {
     assert_eq!(para1.number.as_deref(), Some("1."));
     // 1 List block + 1 trailing plain Text = 2
     assert_eq!(para1.alineas.len(), 2, "Article 5 para 1 should have 2 alinea blocks");
-    assert!(matches!(&para1.alineas[1], Subparagraph::Text { number: None, .. }),
+    assert!(matches!(&para1.alineas[1], Subparagraph::Text(_)),
         "Article 5 para 1 alineas[1] should be trailing plain Text");
     match &para1.alineas[0] {
         Subparagraph::List(lb) => {
             assert_eq!(lb.items.len(), 8, "Article 5 list should have 8 items");
-            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
+            assert!(matches!(&lb.items[0], Item { number: 1, content: ItemContent::Text(_) }));
             // Item (c) has 2 sub-items.
             match &lb.items[2] {
-                Subparagraph::List(ListBlock { number, items, .. }) => {
-                    assert_eq!(*number, Some(3));
-                    assert_eq!(items.len(), 2, "Article 5 item (c) should have 2 sub-items");
+                Item { number: 3, content: ItemContent::List(inner) } => {
+                    assert_eq!(inner.items.len(), 2, "Article 5 item (c) should have 2 sub-items");
                 }
                 _ => panic!("Article 5 items[2] should be a nested List for (c)"),
             }
             // Item (h) has 3 sub-items.
             match &lb.items[7] {
-                Subparagraph::List(ListBlock { number, items, .. }) => {
-                    assert_eq!(*number, Some(8));
-                    assert_eq!(items.len(), 3, "Article 5 item (h) should have 3 sub-items");
+                Item { number: 8, content: ItemContent::List(inner) } => {
+                    assert_eq!(inner.items.len(), 3, "Article 5 item (h) should have 3 sub-items");
                 }
                 _ => panic!("Article 5 items[7] should be a nested List for (h)"),
             }
@@ -110,12 +108,12 @@ fn eu_ai_act_structure() {
     assert_eq!(iii_list.items.len(), 8, "Annex III should have 8 high-risk category items");
     // Item 0 (Biometrics) has 3 alpha sub-items.
     match &iii_list.items[0] {
-        Subparagraph::List(inner) =>
+        Item { content: ItemContent::List(inner), .. } =>
             assert_eq!(inner.items.len(), 3, "Annex III item 1 should have 3 sub-items"),
         _ => panic!("expected nested List for Annex III item 1"),
     }
     // Item 1 (Critical infrastructure) has no sub-items.
-    assert!(matches!(&iii_list.items[1], Subparagraph::Text { .. }),
+    assert!(matches!(&iii_list.items[1], Item { content: ItemContent::Text(_), .. }),
         "Annex III item 2 should be a plain Text (no sub-items)");
 
     // Annex IV (index 3): NP-wrapped list items → Paragraphs mode, List block with no empty text.
@@ -130,7 +128,7 @@ fn eu_ai_act_structure() {
         .find_map(|b| if let Subparagraph::List(lb) = b { Some(lb) } else { None })
         .expect("Annex IV should contain a List block");
     let empty_items: Vec<_> = iv_list.items.iter()
-        .filter(|item| matches!(item, Subparagraph::Text { text, .. } if text.is_empty()))
+        .filter(|item| matches!(item, Item { content: ItemContent::Text(t), .. } if t.is_empty()))
         .collect();
     assert!(empty_items.is_empty(), "Annex IV has {} list item(s) with empty text", empty_items.len());
 

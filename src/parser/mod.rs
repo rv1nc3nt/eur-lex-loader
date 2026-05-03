@@ -29,7 +29,7 @@ pub(crate) use citation::extract_citations;
 use roxmltree::Node;
 
 use crate::error::Error;
-use crate::model::{Cell, ListBlock, ListType, Row, Subparagraph, Table};
+use crate::model::{Cell, Item, ItemContent, ListBlock, ListType, Row, Subparagraph, Table};
 use text::extract_text;
 
 /// Returns the first direct child element of `node` with the given tag name.
@@ -54,18 +54,17 @@ pub(crate) fn list_type_from(node: Node) -> Option<ListType> {
     }
 }
 
-/// Converts a `<LIST>` element into a sequence of [`Subparagraph`]s.
+/// Converts a `<LIST>` element into a vec of [`Item`]s.
 ///
-/// Each `<ITEM>` becomes either a [`Subparagraph::Text`] (simple item) or a
-/// [`Subparagraph::List`] (item with a nested sub-list). Item numbers are
-/// stored as 1-based positions; the display label is recoverable from the
-/// enclosing list's [`ListType`] and the position.
-pub(crate) fn parse_list_as_subparagraphs(node: Node) -> Vec<Subparagraph> {
+/// Each `<ITEM>` becomes an [`Item`] with a 1-based position. Simple items
+/// produce [`ItemContent::Text`]; items with a nested `<LIST>` produce
+/// [`ItemContent::List`].
+pub(crate) fn parse_items(node: Node) -> Vec<Item> {
     node.children()
         .filter(|n| n.is_element() && n.tag_name().name() == "ITEM")
         .enumerate()
         .map(|(i, item)| {
-            let pos = (i + 1) as u32;
+            let number = (i + 1) as u32;
             if let Some(np) = item
                 .children()
                 .find(|n| n.is_element() && n.tag_name().name() == "NP")
@@ -81,11 +80,11 @@ pub(crate) fn parse_list_as_subparagraphs(node: Node) -> Vec<Subparagraph> {
                     .flat_map(|p| p.children().filter(|n| n.is_element() && n.tag_name().name() == "LIST"))
                     .collect();
                 if nested_lists.is_empty() {
-                    Subparagraph::Text { text, number: Some(pos) }
+                    Item { number, content: ItemContent::Text(text) }
                 } else {
                     let list_type = nested_lists.first().and_then(|n| list_type_from(*n));
-                    let items = nested_lists.into_iter().flat_map(parse_list_as_subparagraphs).collect();
-                    Subparagraph::List(ListBlock { list_type, number: Some(pos), intro: text, items })
+                    let items = nested_lists.into_iter().flat_map(parse_items).collect();
+                    Item { number, content: ItemContent::List(ListBlock { list_type, intro: text, items }) }
                 }
             } else {
                 let text = item
@@ -94,7 +93,7 @@ pub(crate) fn parse_list_as_subparagraphs(node: Node) -> Vec<Subparagraph> {
                     .map(extract_text)
                     .collect::<Vec<_>>()
                     .join(" ");
-                Subparagraph::Text { text, number: Some(pos) }
+                Item { number, content: ItemContent::Text(text) }
             }
         })
         .collect()
@@ -161,10 +160,10 @@ pub(crate) fn parse_table(gr_tbl: Node) -> Vec<Subparagraph> {
 /// | `<P>` (plain) | pending intro; flushed as `Text` if not followed by `<LIST>` |
 /// | `<P>` immediately before sibling `<LIST>` | grouped into `List` with intro |
 /// | `<P>` wrapping `<LIST>` or `<TBL>` children | those blocks expanded directly |
-/// | `<LIST>` | `List` via [`parse_list_as_subparagraphs`] |
+/// | `<LIST>` | `List` via [`parse_items`] |
 /// | `<GR.TBL>` | one `Table` per `<TBL>` child |
 /// | `<TBL>` | `Table` via [`parse_single_tbl`] |
-/// | `<NP>` | `Text { number: Some(NO.P), text: TXT }` |
+/// | `<NP>` | `Text(TXT)` |
 /// | `<TITLE>` | skipped (structural, extracted by callers) |
 /// | other | text content as `Text` |
 pub(crate) fn parse_block_children(node: Node) -> Vec<Subparagraph> {
@@ -186,22 +185,21 @@ pub(crate) fn parse_block_children(node: Node) -> Vec<Subparagraph> {
                     .collect();
                 if !nested_blocks.is_empty() {
                     if let Some(t) = pending.take() {
-                        result.push(Subparagraph::Text { text: t, number: None });
+                        result.push(Subparagraph::Text(t));
                     }
                     for block in nested_blocks {
                         match block.tag_name().name() {
                             "LIST" => result.push(Subparagraph::List(ListBlock {
                                 list_type: list_type_from(block),
-                                number: None,
                                 intro: String::new(),
-                                items: parse_list_as_subparagraphs(block),
+                                items: parse_items(block),
                             })),
                             _ => result.push(parse_single_tbl(block)),
                         }
                     }
                 } else {
                     if let Some(t) = pending.take() {
-                        result.push(Subparagraph::Text { text: t, number: None });
+                        result.push(Subparagraph::Text(t));
                     }
                     let t = extract_text(child);
                     if !t.is_empty() {
@@ -213,42 +211,34 @@ pub(crate) fn parse_block_children(node: Node) -> Vec<Subparagraph> {
                 let intro = pending.take().unwrap_or_default();
                 result.push(Subparagraph::List(ListBlock {
                     list_type: list_type_from(child),
-                    number: None,
                     intro,
-                    items: parse_list_as_subparagraphs(child),
+                    items: parse_items(child),
                 }));
             }
             "NP" => {
                 if let Some(t) = pending.take() {
-                    result.push(Subparagraph::Text { text: t, number: None });
+                    result.push(Subparagraph::Text(t));
                 }
-                let number: Option<u32> = child
-                    .children()
-                    .find(|n| n.is_element() && n.tag_name().name() == "NO.P")
-                    .and_then(|n| {
-                        let s = extract_text(n);
-                        s.chars().filter(|c| c.is_ascii_digit()).collect::<String>().parse().ok()
-                    });
                 // <TXT> is the standard body; fall back to the full <NP> text when absent.
                 let text = child
                     .children()
                     .find(|n| n.is_element() && n.tag_name().name() == "TXT")
                     .map(extract_text)
                     .unwrap_or_else(|| extract_text(child));
-                result.push(Subparagraph::Text { text, number });
+                result.push(Subparagraph::Text(text));
             }
             "TITLE" => {
                 // Structural title elements are extracted by callers; skip here.
             }
             "GR.TBL" => {
                 if let Some(t) = pending.take() {
-                    result.push(Subparagraph::Text { text: t, number: None });
+                    result.push(Subparagraph::Text(t));
                 }
                 result.extend(parse_table(child));
             }
             "TBL" => {
                 if let Some(t) = pending.take() {
-                    result.push(Subparagraph::Text { text: t, number: None });
+                    result.push(Subparagraph::Text(t));
                 }
                 result.push(parse_single_tbl(child));
             }
@@ -257,7 +247,7 @@ pub(crate) fn parse_block_children(node: Node) -> Vec<Subparagraph> {
                 // reduced to their text content. Structure is lost but no text
                 // is silently dropped.
                 if let Some(t) = pending.take() {
-                    result.push(Subparagraph::Text { text: t, number: None });
+                    result.push(Subparagraph::Text(t));
                 }
                 let t = extract_text(child);
                 if !t.is_empty() {
@@ -268,13 +258,13 @@ pub(crate) fn parse_block_children(node: Node) -> Vec<Subparagraph> {
     }
     // Flush any trailing <P> not followed by a <LIST>.
     if let Some(t) = pending {
-        result.push(Subparagraph::Text { text: t, number: None });
+        result.push(Subparagraph::Text(t));
     }
     // Pure inline node — wrap the whole text as a single Text block.
     if result.is_empty() {
         let t = extract_text(node);
         if !t.is_empty() {
-            result.push(Subparagraph::Text { text: t, number: None });
+            result.push(Subparagraph::Text(t));
         }
     }
     result

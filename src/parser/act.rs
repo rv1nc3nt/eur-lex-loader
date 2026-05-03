@@ -496,7 +496,7 @@ mod tests {
         assert_eq!(art.paragraphs.len(), 2);
         assert_eq!(art.paragraphs[0].number.as_deref(), Some("1."));
         assert!(matches!(&art.paragraphs[1].alineas[0],
-            Subparagraph::Text { text: t, number: None } if t == "Second paragraph."));
+            Subparagraph::Text(t) if t == "Second paragraph."));
     }
 
     #[test]
@@ -510,7 +510,7 @@ mod tests {
         let art = parse_article(d.root_element()).unwrap();
         assert_eq!(art.paragraphs.len(), 1);
         assert!(art.paragraphs[0].number.is_none());
-        assert!(matches!(&art.paragraphs[0].alineas[0], Subparagraph::Text { text: t, number: None } if t == "Only text."));
+        assert!(matches!(&art.paragraphs[0].alineas[0], Subparagraph::Text(t) if t == "Only text."));
     }
 
     #[test]
@@ -549,21 +549,20 @@ mod tests {
             Subparagraph::List(lb) => {
                 assert!(lb.intro.contains("prohibited"));
                 assert_eq!(lb.items.len(), 2);
-                assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
+                assert!(matches!(&lb.items[0], Item { number: 1, content: ItemContent::Text(_) }));
                 match &lb.items[1] {
-                    Subparagraph::List(inner) => {
-                        assert_eq!(inner.number, Some(2));
+                    Item { number: 2, content: ItemContent::List(inner) } => {
                         assert_eq!(inner.intro, "Practice B:");
                         assert_eq!(inner.items.len(), 2);
-                        assert!(matches!(&inner.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
-                        assert!(matches!(&inner.items[1], Subparagraph::Text { number: Some(n), .. } if *n == 2));
+                        assert!(matches!(&inner.items[0], Item { number: 1, content: ItemContent::Text(_) }));
+                        assert!(matches!(&inner.items[1], Item { number: 2, content: ItemContent::Text(_) }));
                     }
                     _ => panic!("expected nested List for item (b)"),
                 }
             }
             _ => panic!("expected List at alineas[0]"),
         }
-        assert!(matches!(&alineas[1], Subparagraph::Text { text: t, number: None } if t.contains("prejudice")));
+        assert!(matches!(&alineas[1], Subparagraph::Text(t) if t.contains("prejudice")));
     }
 
     #[test]
@@ -592,8 +591,8 @@ mod tests {
             Subparagraph::List(lb) => {
                 assert_eq!(lb.intro, "For the purposes of this Regulation:");
                 assert_eq!(lb.items.len(), 2);
-                assert!(matches!(&lb.items[0], Subparagraph::Text { text: t, number: Some(n) } if *n == 1 && t == "first definition"));
-                assert!(matches!(&lb.items[1], Subparagraph::Text { text: t, number: Some(n) } if *n == 2 && t == "second definition"));
+                assert!(matches!(&lb.items[0], Item { number: 1, content: ItemContent::Text(t) } if t == "first definition"));
+                assert!(matches!(&lb.items[1], Item { number: 2, content: ItemContent::Text(t) } if t == "second definition"));
             }
             _ => panic!("expected List at alineas[0]"),
         }

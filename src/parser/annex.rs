@@ -9,7 +9,7 @@ use roxmltree::{Document, Node};
 
 use crate::error::Error;
 use crate::model::*;
-use super::{child, extract_citations, list_type_from, parse_block_children, parse_list_as_subparagraphs, parse_single_tbl, parse_table};
+use super::{child, extract_citations, list_type_from, parse_block_children, parse_items, parse_single_tbl, parse_table};
 use super::text::extract_text;
 
 /// Parses a Formex annex XML string (`<ANNEX>` root) into an [`Annex`].
@@ -118,7 +118,7 @@ fn parse_annex_paragraphs(node: Node) -> Vec<Paragraph> {
                          alineas: &mut Vec<Subparagraph>,
                          intro: &mut Option<String>| {
         if let Some(t) = intro.take() {
-            alineas.push(Subparagraph::Text { text: t, number: None });
+            alineas.push(Subparagraph::Text(t));
         }
         if !alineas.is_empty() {
             result.push(Paragraph { number: None, alineas: std::mem::take(alineas), citations: vec![] });
@@ -140,22 +140,21 @@ fn parse_annex_paragraphs(node: Node) -> Vec<Paragraph> {
                     .collect();
                 if !nested_blocks.is_empty() {
                     if let Some(t) = pending_intro.take() {
-                        pending_alineas.push(Subparagraph::Text { text: t, number: None });
+                        pending_alineas.push(Subparagraph::Text(t));
                     }
                     for block in nested_blocks {
                         match block.tag_name().name() {
                             "LIST" => pending_alineas.push(Subparagraph::List(ListBlock {
                                 list_type: list_type_from(block),
-                                number: None,
                                 intro: String::new(),
-                                items: parse_list_as_subparagraphs(block),
+                                items: parse_items(block),
                             })),
                             _ => pending_alineas.push(parse_single_tbl(block)),
                         }
                     }
                 } else {
                     if let Some(t) = pending_intro.take() {
-                        pending_alineas.push(Subparagraph::Text { text: t, number: None });
+                        pending_alineas.push(Subparagraph::Text(t));
                     }
                     let t = extract_text(elem);
                     if !t.is_empty() {
@@ -167,27 +166,26 @@ fn parse_annex_paragraphs(node: Node) -> Vec<Paragraph> {
                 let intro = pending_intro.take().unwrap_or_default();
                 pending_alineas.push(Subparagraph::List(ListBlock {
                     list_type: list_type_from(elem),
-                    number: None,
                     intro,
-                    items: parse_list_as_subparagraphs(elem),
+                    items: parse_items(elem),
                 }));
             }
             "TITLE" => {}
             "GR.TBL" => {
                 if let Some(t) = pending_intro.take() {
-                    pending_alineas.push(Subparagraph::Text { text: t, number: None });
+                    pending_alineas.push(Subparagraph::Text(t));
                 }
                 pending_alineas.extend(parse_table(elem));
             }
             "TBL" => {
                 if let Some(t) = pending_intro.take() {
-                    pending_alineas.push(Subparagraph::Text { text: t, number: None });
+                    pending_alineas.push(Subparagraph::Text(t));
                 }
                 pending_alineas.push(parse_single_tbl(elem));
             }
             _ => {
                 if let Some(t) = pending_intro.take() {
-                    pending_alineas.push(Subparagraph::Text { text: t, number: None });
+                    pending_alineas.push(Subparagraph::Text(t));
                 }
                 let t = extract_text(elem);
                 if !t.is_empty() {
@@ -227,12 +225,12 @@ fn np_to_paragraph(node: Node) -> Paragraph {
         if txt.is_empty() {
             vec![]
         } else {
-            vec![Subparagraph::Text { text: txt, number: None }]
+            vec![Subparagraph::Text(txt)]
         }
     } else {
         let list_type = nested_lists.first().and_then(|n| list_type_from(*n));
-        let items = nested_lists.into_iter().flat_map(parse_list_as_subparagraphs).collect();
-        vec![Subparagraph::List(ListBlock { list_type, number: None, intro: txt, items })]
+        let items = nested_lists.into_iter().flat_map(parse_items).collect();
+        vec![Subparagraph::List(ListBlock { list_type, intro: txt, items })]
     };
 
     let citations = extract_citations(node);
@@ -371,7 +369,7 @@ mod tests {
         assert_eq!(sections.len(), 2);
         assert_eq!(sections[0].title, "Part A");
         assert_eq!(sections[0].alineas.len(), 1);
-        assert!(matches!(&sections[0].alineas[0], Subparagraph::Text { text: t, .. } if t == "Content paragraph."));
+        assert!(matches!(&sections[0].alineas[0], Subparagraph::Text(t) if t == "Content paragraph."));
         assert_eq!(sections[1].title, "Part B");
     }
 
@@ -410,7 +408,7 @@ mod tests {
         assert!(paras[0].number.is_none());
         assert_eq!(paras[0].alineas.len(), 1);
         assert!(matches!(&paras[0].alineas[0],
-            Subparagraph::Text { text: t, number: None } if t == "Some text."));
+            Subparagraph::Text(t) if t == "Some text."));
     }
 
     #[test]
@@ -429,7 +427,7 @@ mod tests {
         assert_eq!(paras[0].number.as_deref(), Some("1."));
         assert_eq!(paras[0].alineas.len(), 1);
         assert!(matches!(&paras[0].alineas[0],
-            Subparagraph::Text { text: t, number: None } if t == "First item."));
+            Subparagraph::Text(t) if t == "First item."));
     }
 
     #[test]
@@ -518,7 +516,7 @@ mod tests {
         assert_eq!(paras.len(), 3);
         assert!(paras[0].number.is_none());
         assert!(matches!(&paras[0].alineas[0],
-            Subparagraph::Text { text: t, .. } if t == "Preamble text."));
+            Subparagraph::Text(t) if t == "Preamble text."));
         assert_eq!(paras[1].number.as_deref(), Some("1."));
         assert_eq!(paras[2].number.as_deref(), Some("2."));
     }

@@ -317,28 +317,14 @@ pub struct Paragraph {
     pub citations: Vec<Citation>,
 }
 
-/// A content element within a [`Paragraph`].
-///
-/// Covers plain text and full list groups (intro + items). The recursive
-/// structure — `List` items are themselves `Vec<Subparagraph>` — handles
-/// nesting without separate fields.
+/// A content element within a [`Paragraph`] or [`AnnexSection`].
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Subparagraph {
-    /// Plain text, or a single numbered list item.
-    ///
-    /// `number` is the 1-based position within the enclosing list when this
-    /// is a list item, and absent for plain text blocks. The display label
-    /// ("a", "ii", "3", "—") is recoverable from the parent list's
-    /// [`ListType`] combined with this position.
-    Text {
-        text: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        number: Option<u32>,
-    },
-    /// A list group: optional item label (present when this list is itself a
-    /// numbered entry in a parent list), intro text, and the list items.
+    /// Plain text block (a bare `<P>` or `<ALINEA>`).
+    Text(String),
+    /// A list (`<LIST>`), with an optional intro and its items.
     List(ListBlock),
-    /// A table parsed from a `<GR.TBL>` element.
+    /// A table parsed from a `<GR.TBL>` or `<TBL>` element.
     Table(Table),
 }
 
@@ -392,23 +378,37 @@ pub enum ListType {
     Dash,
 }
 
-/// A list: optional item label, intro text, and items.
+/// A single `<ITEM>` within a [`ListBlock`].
 ///
-/// `number` is the 1-based position of this list within its parent list when
-/// it is itself a numbered item; `None` for top-level lists.
+/// Always carries a 1-based position. The display label ("a", "ii", "1", "—")
+/// is derivable from the parent list's [`ListType`] and this number.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct Item {
+    /// 1-based position within the enclosing list.
+    pub number: u32,
+    /// The item content: plain text or a nested sub-list.
+    pub content: ItemContent,
+}
+
+/// The content of a list [`Item`].
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum ItemContent {
+    /// A plain text item (no nested list).
+    Text(String),
+    /// An item whose body is itself a list, with optional intro text.
+    List(ListBlock),
+}
+
+/// A `<LIST>` element: optional intro text, a style, and its items.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct ListBlock {
     /// Numbering style of the list items. Omitted from JSON when absent.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub list_type: Option<ListType>,
-    /// 1-based position in the parent list when this block is itself a list
-    /// item. Omitted from JSON when absent (top-level list).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub number: Option<u32>,
     /// The text that introduces the list (may be empty).
     pub intro: String,
-    /// The items of the list, each itself a [`Subparagraph`].
-    pub items: Vec<Subparagraph>,
+    /// The items of the list.
+    pub items: Vec<Item>,
 }
 
 /// A titled content section within an [`Annex`] (`<GR.SEQ>`).

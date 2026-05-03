@@ -13,7 +13,7 @@ use roxmltree::Document;
 use std::collections::HashMap;
 
 use crate::error::Error;
-use crate::model::{Act, ConsolidatedAct, Metadata, OfficialJournal, RegularAct, ChapterContents, ListBlock, Subparagraph};
+use crate::model::{Act, ConsolidatedAct, Item, ItemContent, Metadata, OfficialJournal, RegularAct, ChapterContents, ListBlock, Subparagraph};
 use crate::parser::{parse_regular_act, parse_consolidated_act, parse_annex, parse_cons_annex};
 
 /// Loads a complete act from a directory of Formex `.fmx.xml` files.
@@ -66,33 +66,37 @@ fn extract_definitions(enacting_terms: &crate::model::EnactingTerms) -> HashMap<
     if let Some(article) = articles.find(|a| a.title.as_deref() == Some("Definitions")) {
         for para in &article.paragraphs {
             for alinea in &para.alineas {
-                collect_definition_items(alinea, &mut map);
+                if let Subparagraph::List(lb) = alinea {
+                    for item in &lb.items {
+                        collect_definition_items(item, &mut map);
+                    }
+                }
             }
         }
     }
     map
 }
 
-/// Recursively visits a [`Subparagraph`] and inserts any definition it finds
-/// into `map`. A definition is recognised by a leading `\u{201C}term\u{201D}`
-/// pair produced by Formex `<QUOT.START>` / `<QUOT.END>` markers.
-fn collect_definition_items(sub: &Subparagraph, map: &mut HashMap<String, String>) {
-    match sub {
-        Subparagraph::List(ListBlock { intro, items, .. }) => {
-            // Items with sub-lists carry their definition in the intro text.
-            if let Some(term) = extract_term(intro) {
-                map.insert(term.to_owned(), intro.clone());
-            }
-            for item in items {
-                collect_definition_items(item, map);
-            }
-        }
-        Subparagraph::Text { text, .. } => {
+/// Visits an [`Item`] and inserts any definition it finds into `map`.
+///
+/// A definition is recognised by a leading `\u{201C}term\u{201D}` pair
+/// produced by Formex `<QUOT.START>` / `<QUOT.END>` markers.
+fn collect_definition_items(item: &Item, map: &mut HashMap<String, String>) {
+    match &item.content {
+        ItemContent::Text(text) => {
             if let Some(term) = extract_term(text) {
                 map.insert(term.to_owned(), text.clone());
             }
         }
-        Subparagraph::Table(_) => {}
+        ItemContent::List(ListBlock { intro, items, .. }) => {
+            // Items with sub-lists carry their definition in the intro text.
+            if let Some(term) = extract_term(intro) {
+                map.insert(term.to_owned(), intro.clone());
+            }
+            for sub_item in items {
+                collect_definition_items(sub_item, map);
+            }
+        }
     }
 }
 

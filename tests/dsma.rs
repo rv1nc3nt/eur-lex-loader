@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{Act, ChapterContents, Subparagraph};
+use eur_lex_loader::model::{Act, ChapterContents, Item, ItemContent, Subparagraph};
 
 #[test]
 fn dsma_structure() {
@@ -55,7 +55,7 @@ fn dsma_structure() {
     assert_eq!(art1.paragraphs.len(), 2);
     assert_eq!(art1.paragraphs[0].number.as_deref(), Some("1."));
     assert_eq!(art1.paragraphs[0].alineas.len(), 1);
-    assert!(matches!(&art1.paragraphs[0].alineas[0], Subparagraph::Text { number: None, .. }));
+    assert!(matches!(&art1.paragraphs[0].alineas[0], Subparagraph::Text(_)));
 
     // Article 2 ("Definitions"): bare <ALINEA> with <P> intro + <LIST> (6 items)
     // → 1 unnamed paragraph with a single List block.
@@ -90,8 +90,8 @@ fn dsma_structure() {
     match &p1.alineas[0] {
         Subparagraph::List(lb) => {
             assert_eq!(lb.items.len(), 2);
-            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
-            assert!(matches!(&lb.items[1], Subparagraph::Text { number: Some(n), .. } if *n == 2));
+            assert!(matches!(&lb.items[0], Item { number: 1, content: ItemContent::Text(_) }));
+            assert!(matches!(&lb.items[1], Item { number: 2, content: ItemContent::Text(_) }));
         }
         _ => panic!("Article 5 para 1 alineas[0] should be a List"),
     }

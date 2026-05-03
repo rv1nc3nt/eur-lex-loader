@@ -64,4 +64,4 @@ pub mod model;
 pub mod parser;
 
 pub use loader::load_act;
-pub use model::{Act, RegularAct, ConsolidatedAct, ConsolidatedPreamble, Metadata, OfficialJournal};
+pub use model::{Act, RegularAct, ConsolidatedAct, ConsolidatedPreamble, Item, ItemContent, Metadata, OfficialJournal};

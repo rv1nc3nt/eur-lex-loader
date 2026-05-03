@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, CitedActType, Citation, OjRef, Subparagraph};
+use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, CitedActType, Citation, Item, ItemContent, OjRef, Subparagraph};
 
 #[test]
 fn trademark_act_structure() {
@@ -63,7 +63,7 @@ fn trademark_act_structure() {
     assert_eq!(art1.paragraphs.len(), 2);
     assert_eq!(art1.paragraphs[0].number.as_deref(), Some("1."));
     assert_eq!(art1.paragraphs[0].alineas.len(), 1);
-    assert!(matches!(&art1.paragraphs[0].alineas[0], Subparagraph::Text { number: None, .. }));
+    assert!(matches!(&art1.paragraphs[0].alineas[0], Subparagraph::Text(_)));
 
     // Article 3 ("Capacity to act"): bare <ALINEA> (plain text, no block children)
     // → 1 unnamed paragraph with 1 plain Text block.
@@ -72,7 +72,7 @@ fn trademark_act_structure() {
     assert_eq!(art3.paragraphs.len(), 1);
     assert!(art3.paragraphs[0].number.is_none(), "bare-alinea paragraph should have no number");
     assert_eq!(art3.paragraphs[0].alineas.len(), 1);
-    assert!(matches!(&art3.paragraphs[0].alineas[0], Subparagraph::Text { number: None, .. }));
+    assert!(matches!(&art3.paragraphs[0].alineas[0], Subparagraph::Text(_)));
 
     // Chapter II (idx 1): 4 sections.
     let ch2_secs = match &reg.enacting_terms.chapters[1].contents {
@@ -95,7 +95,7 @@ fn trademark_act_structure() {
     match &p1.alineas[0] {
         Subparagraph::List(lb) => {
             assert_eq!(lb.items.len(), 13, "Article 7 para 1 list should have 13 items");
-            assert!(matches!(&lb.items[0], Subparagraph::Text { number: Some(n), .. } if *n == 1));
+            assert!(matches!(&lb.items[0], Item { number: 1, content: ItemContent::Text(_) }));
         }
         _ => panic!("Article 7 para 1 alineas[0] should be a List"),
     }
