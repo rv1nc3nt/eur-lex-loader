@@ -1,0 +1,98 @@
+.TH EUR_LEX_FETCH 1 2026-05-03 "eur-lex-loader" "User Commands"
+.SH NAME
+eur_lex_fetch \- fetch and extract a Formex EU act from EUR-Lex Cellar
+.SH SYNOPSIS
+.B eur_lex_fetch
+[\fIOPTIONS\fR] \fICELEX\fR \fIDIR\fR
+.SH DESCRIPTION
+.B eur_lex_fetch
+downloads a Formex 4 XML publication from the EUR-Lex Cellar repository
+by CELEX number, extracts the ZIP archive into a local directory, and
+prints the act title to standard output for verification.
+.PP
+Progress messages (fetch start, extraction path) are written to standard
+error so they do not interfere with piping or redirecting the title.
+.PP
+The extracted directory can be passed directly to
+.BR eur_lex_loader (1)
+to parse the act and produce JSON.
+.SH ARGUMENTS
+.TP
+.I CELEX
+CELEX number identifying the act to fetch, e.g.\&
+.BR 32024R1689
+for the EU AI Act or
+.BR 32022R2065
+for the Digital Services Act.
+The format is: sector (3) + year + type (R\~=\~Regulation, L\~=\~Directive)
++ sequential number.
+.TP
+.I DIR
+Directory where the Formex files will be extracted.
+Created if it does not already exist.
+.SH OPTIONS
+.TP
+.BR \-l ", " \-\-lang " \fILANG\fR"
+Language of the publication to request, as an ISO\~639-2/B three-letter
+code.
+Default:
+.BR eng .
+Common values:
+.RS
+.TP
+.B eng
+English (default)
+.TP
+.B fra
+French
+.TP
+.B deu
+German
+.TP
+.B ita
+Italian
+.TP
+.B spa
+Spanish
+.RE
+.TP
+.BR \-h ", " \-\-help
+Print help and exit.
+.TP
+.BR \-V ", " \-\-version
+Print version and exit.
+.SH EXAMPLES
+Fetch the EU AI Act in English into
+.IR data/EU_AI_ACT :
+.PP
+.RS
+.EX
+eur_lex_fetch 32024R1689 data/EU_AI_ACT
+.EE
+.RE
+.PP
+Fetch the Digital Services Act in French:
+.PP
+.RS
+.EX
+eur_lex_fetch 32022R2065 data/DSA_FR \-\-lang fra
+.EE
+.RE
+.PP
+Fetch and immediately parse into compact JSON:
+.PP
+.RS
+.EX
+eur_lex_fetch 32024R1689 data/EU_AI_ACT
+eur_lex_loader data/EU_AI_ACT \-\-compact \-\-output ai_act.json
+.EE
+.RE
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Network error, HTTP error, ZIP extraction failure, or parse error.
+.SH SEE ALSO
+.BR eur_lex_loader (1)

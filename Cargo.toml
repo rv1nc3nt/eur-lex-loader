@@ -7,6 +7,10 @@ edition = "2024"
 name = "eur_lex_loader"
 path = "src/main.rs"
 
+[[bin]]
+name = "eur_lex_fetch"
+path = "src/fetch.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.12", features = ["blocking", "rustls-tls"], default-features = false }

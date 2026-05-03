@@ -84,11 +84,49 @@ The directory will contain several `.fmx.xml` files:
 cargo build --release
 ```
 
-The compiled binary is at `target/release/eur_lex_loader`.
+Two binaries are produced under `target/release/`.
 
 ---
 
 ## Usage
+
+### `eur_lex_fetch` — download a Formex publication
+
+Fetches a ZIP archive from the EUR-Lex Cellar API by CELEX number, extracts it
+into a local directory, then prints the act title so you can confirm the correct
+act was retrieved.
+
+```
+eur_lex_fetch [OPTIONS] <CELEX> <DIR>
+
+Arguments:
+  <CELEX>  CELEX number of the act to fetch (e.g. 32024R1689)
+  <DIR>    Directory where the Formex files will be extracted
+
+Options:
+  -l, --lang <LANG>  Language code (ISO 639-2/B, e.g. eng, fra, deu) [default: eng]
+  -h, --help         Print help
+  -V, --version      Print version
+```
+
+Progress messages are written to stderr; the title is written to stdout.
+
+```bash
+# Fetch the EU AI Act in English
+eur_lex_fetch 32024R1689 data/EU_AI_ACT
+# → Fetching 32024R1689 (eng)...
+# → Extracted to data/EU_AI_ACT
+# → Regulation (EU) 2024/1689 …
+
+# Fetch the DSA in French
+eur_lex_fetch 32022R2065 data/DSA_FR --lang fra
+```
+
+### `eur_lex_loader` — parse and convert to JSON
+
+Parses a local Formex directory (previously fetched with `eur_lex_fetch` or
+downloaded manually) and outputs the act as JSON. Can also fetch on the fly
+without saving the Formex files.
 
 ```
 eur_lex_loader [OPTIONS] [DIR]
@@ -105,8 +143,6 @@ Options:
 ```
 
 `DIR` and `--celex` are mutually exclusive. Running with no arguments prints help.
-
-### Examples
 
 ```bash
 # Fetch the DSA directly from EUR-Lex and pretty-print to stdout

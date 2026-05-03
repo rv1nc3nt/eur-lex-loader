@@ -1,0 +1,133 @@
+.TH EUR_LEX_LOADER 1 2026-05-03 "eur-lex-loader" "User Commands"
+.SH NAME
+eur_lex_loader \- parse a Formex EU act directory and output JSON
+.SH SYNOPSIS
+.B eur_lex_loader
+[\fIOPTIONS\fR] [\fIDIR\fR]
+.SH DESCRIPTION
+.B eur_lex_loader
+parses a Formex 4 XML publication directory and writes the full act
+structure as JSON to standard output (or to a file with
+.BR \-\-output ).
+.PP
+The directory must contain a registry file matching
+.I *.doc.fmx.xml
+or
+.IR *.doc.xml ,
+which lists the main act file and any annex files.
+Such a directory is typically obtained by running
+.BR eur_lex_fetch (1)
+or by manually downloading and extracting the ZIP archive from the
+EUR-Lex Cellar API.
+.PP
+As a convenience,
+.B \-\-celex
+can fetch the act on the fly from EUR-Lex Cellar without saving the
+Formex files to disk.
+For repeated use of the same act, prefer
+.BR eur_lex_fetch (1)
+to avoid redundant network requests.
+.SH ARGUMENTS
+.TP
+.I DIR
+Path to a local Formex act directory.
+Mutually exclusive with
+.BR \-\-celex .
+.SH OPTIONS
+.TP
+.BR \-c ", " \-\-celex " \fICELEX\fR"
+Fetch the act from EUR-Lex Cellar by CELEX number instead of reading a
+local directory.
+Mutually exclusive with
+.IR DIR .
+The language is always English when using this option; use
+.BR eur_lex_fetch (1)
+for other languages.
+.TP
+.BR \-o ", " \-\-output " \fIFILE\fR"
+Write JSON output to
+.I FILE
+instead of standard output.
+.TP
+.B \-\-compact
+Output compact (minified) JSON.
+Default is pretty-printed.
+.TP
+.BR \-h ", " \-\-help
+Print help and exit.
+.TP
+.BR \-V ", " \-\-version
+Print version and exit.
+.SH OUTPUT
+A single JSON object containing:
+.TP
+.B title
+Full title of the act.
+.TP
+.B preamble
+Opening formula, legal basis citations (visas), numbered recitals, and
+enacting formula.
+.TP
+.B enacting_terms
+Operative body: chapters containing either sections or articles directly.
+Each article has numbered paragraphs, each paragraph has alineas
+(plain text or lists, possibly nested).
+.TP
+.B annexes
+Each annex has a number, an optional subtitle, and
+.B content
+which is either
+.B Sections
+(titled sub-divisions) or
+.B Paragraphs
+(flat numbered paragraphs and lists).
+.TP
+.B definitions
+Present only when the act contains a Definitions article.
+A map from defined term to the full definition text as it appears in
+the act.
+.SH EXAMPLES
+Parse a locally extracted regulation:
+.PP
+.RS
+.EX
+eur_lex_loader data/EU_AI_ACT
+.EE
+.RE
+.PP
+Write compact JSON to a file:
+.PP
+.RS
+.EX
+eur_lex_loader data/EU_AI_ACT \-\-compact \-\-output ai_act.json
+.EE
+.RE
+.PP
+Fetch the Digital Services Act on the fly and pipe into
+.BR jq (1):
+.PP
+.RS
+.EX
+eur_lex_loader \-\-celex 32022R2065 | jq '.preamble.recitals | length'
+.EE
+.RE
+.PP
+Look up a definition:
+.PP
+.RS
+.EX
+eur_lex_loader data/EU_AI_ACT | jq '.definitions["AI system"]'
+.EE
+.RE
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+I/O error, XML parse error, missing required element, network error
+(when using
+.BR \-\-celex ),
+or JSON serialisation failure.
+.SH SEE ALSO
+.BR eur_lex_fetch (1)
