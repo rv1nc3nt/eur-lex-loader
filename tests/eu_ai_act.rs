@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{ChapterContents, ListBlock, Subparagraph};
+use eur_lex_loader::model::{AnnexContent, ChapterContents, ListBlock, Subparagraph};
 
 #[test]
 fn eu_ai_act_structure() {
@@ -95,10 +95,15 @@ fn eu_ai_act_structure() {
         _ => panic!("Article 5 para 1 alineas[0] should be a List"),
     }
 
-    // Annex III (index 2): list wrapped in a <P> produces a single List block with 8 items.
+    // Annex III (index 2): list wrapped in a <P> → Paragraphs mode, single List block with 8 items.
     let annex_iii = &reg.annexes[2];
     assert!(annex_iii.number.contains("III"), "expected ANNEX III at index 2");
-    let iii_list = annex_iii.content_blocks.iter()
+    let iii_paragraphs = match &annex_iii.content {
+        AnnexContent::Paragraphs(p) => p,
+        AnnexContent::Sections(_) => panic!("expected Paragraphs for Annex III"),
+    };
+    let iii_list = iii_paragraphs.iter()
+        .flat_map(|p| p.alineas.iter())
         .find_map(|b| if let Subparagraph::List(lb) = b { Some(lb) } else { None })
         .expect("Annex III should contain a List block");
     assert_eq!(iii_list.items.len(), 8, "Annex III should have 8 high-risk category items");
@@ -112,10 +117,15 @@ fn eu_ai_act_structure() {
     assert!(matches!(&iii_list.items[1], Subparagraph::Text { .. }),
         "Annex III item 2 should be a plain Text (no sub-items)");
 
-    // Annex IV (index 3): list items use <NP> wrappers and must not have empty text.
+    // Annex IV (index 3): NP-wrapped list items → Paragraphs mode, List block with no empty text.
     let annex_iv = &reg.annexes[3];
     assert!(annex_iv.number.contains("IV"), "expected ANNEX IV at index 3");
-    let iv_list = annex_iv.content_blocks.iter()
+    let iv_paragraphs = match &annex_iv.content {
+        AnnexContent::Paragraphs(p) => p,
+        AnnexContent::Sections(_) => panic!("expected Paragraphs for Annex IV"),
+    };
+    let iv_list = iv_paragraphs.iter()
+        .flat_map(|p| p.alineas.iter())
         .find_map(|b| if let Subparagraph::List(lb) = b { Some(lb) } else { None })
         .expect("Annex IV should contain a List block");
     let empty_items: Vec<_> = iv_list.items.iter()

@@ -132,11 +132,11 @@ pub struct Paragraph {
     pub alineas: Vec<Subparagraph>,
 }
 
-/// A content element within a [`Paragraph`] or an [`Annex`].
+/// A content element within a [`Paragraph`].
 ///
-/// Covers plain text, full list groups (intro + items), and titled sections
-/// (`<GR.SEQ>`). The recursive structure — `List` and `Section` items are
-/// themselves `Vec<Subparagraph>` — handles nesting without separate fields.
+/// Covers plain text and full list groups (intro + items). The recursive
+/// structure — `List` items are themselves `Vec<Subparagraph>` — handles
+/// nesting without separate fields.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Subparagraph {
     /// Plain text, or a single numbered list item.
@@ -151,13 +151,6 @@ pub enum Subparagraph {
     /// A list group: optional item label (present when this list is itself a
     /// numbered entry in a parent list), intro text, and the list items.
     List(ListBlock),
-    /// A titled section (`<GR.SEQ>`), grouping related content under a heading.
-    Section {
-        /// Section heading (from `<TITLE><TI>`).
-        title: String,
-        /// Content items nested inside this section.
-        items: Vec<Subparagraph>,
-    },
 }
 
 /// A list: optional item label, intro text, and items.
@@ -175,6 +168,28 @@ pub struct ListBlock {
     pub items: Vec<Subparagraph>,
 }
 
+/// A titled content section within an [`Annex`] (`<GR.SEQ>`).
+///
+/// Used when an annex organises its content under named headings.  For annexes
+/// that consist of flat numbered paragraphs or plain text, [`AnnexContent::Paragraphs`]
+/// is used instead.
+#[derive(Serialize)]
+pub struct AnnexSection {
+    /// Section heading (from `<TITLE><TI>`).
+    pub title: String,
+    /// Content items nested inside this section.
+    pub alineas: Vec<Subparagraph>,
+}
+
+/// Discriminates the top-level structure of an annex.
+#[derive(Serialize)]
+pub enum AnnexContent {
+    /// The annex is divided into titled sections (`<GR.SEQ>`).
+    Sections(Vec<AnnexSection>),
+    /// The annex contains flat content: numbered paragraphs, lists, or plain text.
+    Paragraphs(Vec<Paragraph>),
+}
+
 /// A parsed annex file (`<ANNEX>`).
 #[derive(Serialize)]
 pub struct Annex {
@@ -182,7 +197,6 @@ pub struct Annex {
     pub number: String,
     /// Optional descriptive subtitle (from `<TITLE><STI>`); present only in some annexes.
     pub subtitle: Option<String>,
-    /// Top-level content from `<CONTENTS>`: the same [`Subparagraph`] type used
-    /// in article paragraphs, covering plain text, lists, and titled sections.
-    pub content_blocks: Vec<Subparagraph>,
+    /// Top-level content: either titled sections or flat paragraphs.
+    pub content: AnnexContent,
 }

@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{ChapterContents, Subparagraph};
+use eur_lex_loader::model::{AnnexContent, ChapterContents, Subparagraph};
 
 #[test]
 fn trademark_act_structure() {
@@ -113,10 +113,10 @@ fn trademark_act_structure() {
     };
     assert_eq!(ch14_arts.len(), 6, "Chapter XIV should have 6 articles");
 
-    // Annexes each wrap their content in a GR.SEQ → Subparagraph::Section.
+    // Annexes each wrap their content in GR.SEQ elements → AnnexContent::Sections.
     assert!(
-        matches!(&reg.annexes[0].content_blocks[0], Subparagraph::Section { .. }),
-        "Annex I content should start with a Section (GR.SEQ)"
+        matches!(&reg.annexes[0].content, AnnexContent::Sections(_)),
+        "Annex I content should be Sections (GR.SEQ)"
     );
 
     // No Definitions article → definitions map is empty.

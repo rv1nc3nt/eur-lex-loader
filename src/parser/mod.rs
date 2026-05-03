@@ -7,7 +7,7 @@
 //! - `child` — looks up a mandatory direct child element by tag name.
 //! - `parse_block_children` — converts the direct children of any block-level
 //!   element into [`crate::model::Subparagraph`]s, handling `<P>`, `<LIST>`,
-//!   `<NP>`, and `<GR.SEQ>`.
+//!   and `<NP>`.
 
 /// Parser for the main act XML file (`<ACT>` root).
 mod act;
@@ -91,8 +91,7 @@ pub(crate) fn parse_list_as_subparagraphs(node: Node) -> Vec<Subparagraph> {
 
 /// Converts the direct children of a block-level element into [`Subparagraph`]s.
 ///
-/// Handles all Formex block elements that appear in both article alineas and
-/// annex content:
+/// Handles Formex block elements that appear in article alineas:
 ///
 /// | XML element | Output |
 /// |---|---|
@@ -101,7 +100,6 @@ pub(crate) fn parse_list_as_subparagraphs(node: Node) -> Vec<Subparagraph> {
 /// | `<P>` wrapping a `<LIST>` child | `List` with empty intro |
 /// | `<LIST>` | `List` via [`parse_list_as_subparagraphs`] |
 /// | `<NP>` | `Text { number: Some(NO.P), text: TXT }` |
-/// | `<GR.SEQ>` | `Section { title, items: parse_block_children(…) }` (recursive) |
 /// | `<TITLE>` | skipped (structural, extracted by callers) |
 /// | other | text content as `Text` |
 pub(crate) fn parse_block_children(node: Node) -> Vec<Subparagraph> {
@@ -162,26 +160,6 @@ pub(crate) fn parse_block_children(node: Node) -> Vec<Subparagraph> {
                     .map(extract_text)
                     .unwrap_or_else(|| extract_text(child));
                 result.push(Subparagraph::Text { text, number: Some(number) });
-            }
-            "GR.SEQ" => {
-                if let Some(t) = pending.take() {
-                    result.push(Subparagraph::Text { text: t, number: None });
-                }
-                let title = child
-                    .children()
-                    .find(|n| n.is_element() && n.tag_name().name() == "TITLE")
-                    .and_then(|t| {
-                        t.children()
-                            .find(|n| n.is_element() && n.tag_name().name() == "TI")
-                    })
-                    .map(extract_text)
-                    .unwrap_or_default();
-                if !title.is_empty() {
-                    result.push(Subparagraph::Section {
-                        title,
-                        items: parse_block_children(child),
-                    });
-                }
             }
             "TITLE" => {
                 // Structural title elements are extracted by callers; skip here.
