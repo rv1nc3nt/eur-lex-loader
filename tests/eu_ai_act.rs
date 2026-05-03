@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, ListBlock, Subparagraph};
+use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, CitedActType, Citation, ListBlock, OjRef, Subparagraph};
 
 #[test]
 fn eu_ai_act_structure() {
@@ -150,4 +150,70 @@ fn eu_ai_act_structure() {
         reg.definitions.contains_key("AI system"),
         "definitions should contain 'AI system'"
     );
+}
+
+#[test]
+fn eu_ai_act_recital_citations() {
+    let act = load_act(Path::new("data/32024R1689"))
+        .expect("failed to load EU AI Act from data/32024R1689");
+    let Act::Regular(reg) = act else { panic!("EU AI Act should be a Regular act") };
+
+    let recitals = &reg.preamble.recitals;
+
+    // Recital (10): four NOTE-backed citations — GDPR, Regulation 2018/1725,
+    // Law Enforcement Directive, and Directive 2002/58/EC (ePrivacy).
+    // Source: L_202401689EN.000101.fmx.xml, CONSID (10).
+    let r10 = &recitals[9].citations;
+    assert!(
+        r10.contains(&Citation { act_type: CitedActType::Regulation, regime: Some("EU".into()), number: "2016/679".into(),
+            oj_ref: Some(OjRef { collection: "L".into(), number: "119".into(), date: "20160504".into(), page: 1 }) }),
+        "recital (10): missing Regulation (EU) 2016/679 (GDPR)"
+    );
+    assert!(
+        r10.contains(&Citation { act_type: CitedActType::Regulation, regime: Some("EU".into()), number: "2018/1725".into(),
+            oj_ref: Some(OjRef { collection: "L".into(), number: "295".into(), date: "20181121".into(), page: 39 }) }),
+        "recital (10): missing Regulation (EU) 2018/1725"
+    );
+    assert!(
+        r10.contains(&Citation { act_type: CitedActType::Directive, regime: Some("EU".into()), number: "2016/680".into(),
+            oj_ref: Some(OjRef { collection: "L".into(), number: "119".into(), date: "20160504".into(), page: 89 }) }),
+        "recital (10): missing Directive (EU) 2016/680"
+    );
+    assert!(
+        r10.contains(&Citation { act_type: CitedActType::Directive, regime: Some("EC".into()), number: "2002/58".into(),
+            oj_ref: Some(OjRef { collection: "L".into(), number: "201".into(), date: "20020731".into(), page: 37 }) }),
+        "recital (10): missing Directive 2002/58/EC (ePrivacy)"
+    );
+
+    // Recital (11): DSA cited with OJ ref via NOTE.
+    // Source: L_202401689EN.000101.fmx.xml, CONSID (11).
+    let r11 = &recitals[10].citations;
+    assert!(
+        r11.contains(&Citation { act_type: CitedActType::Regulation, regime: Some("EU".into()), number: "2022/2065".into(),
+            oj_ref: Some(OjRef { collection: "L".into(), number: "277".into(), date: "20221027".into(), page: 1 }) }),
+        "recital (11): missing Regulation (EU) 2022/2065 (DSA)"
+    );
+
+    // Recital (14): three inline citations only — no NOTEs in this recital.
+    // Source: L_202401689EN.000101.fmx.xml, CONSID (14).
+    let r14 = &recitals[13].citations;
+    assert!(
+        r14.contains(&Citation { act_type: CitedActType::Regulation, regime: Some("EU".into()),
+            number: "2016/679".into(), oj_ref: None }),
+        "recital (14): missing inline Regulation (EU) 2016/679"
+    );
+    assert!(
+        r14.contains(&Citation { act_type: CitedActType::Regulation, regime: Some("EU".into()),
+            number: "2018/1725".into(), oj_ref: None }),
+        "recital (14): missing inline Regulation (EU) 2018/1725"
+    );
+    assert!(
+        r14.contains(&Citation { act_type: CitedActType::Directive, regime: Some("EU".into()),
+            number: "2016/680".into(), oj_ref: None }),
+        "recital (14): missing inline Directive (EU) 2016/680"
+    );
+    // Inline-only citations must not carry an OJ ref.
+    for c in r14 {
+        assert!(c.oj_ref.is_none(), "recital (14): all citations should be inline (no OJ ref), found {:?}", c);
+    }
 }

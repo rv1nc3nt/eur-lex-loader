@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use eur_lex_loader::loader::load_act;
-use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, Subparagraph};
+use eur_lex_loader::model::{Act, AnnexContent, ChapterContents, CitedActType, Citation, OjRef, Subparagraph};
 
 #[test]
 fn trademark_act_structure() {
@@ -122,4 +122,69 @@ fn trademark_act_structure() {
 
     // No Definitions article → definitions map is empty.
     assert!(reg.definitions.is_empty(), "TrademarkAct should have no definitions");
+}
+
+#[test]
+fn trademark_act_recital_citations() {
+    let act = load_act(Path::new("data/32017R1001"))
+        .expect("failed to load TrademarkAct from data/32017R1001");
+    let Act::Regular(reg) = act else { panic!("TrademarkAct should be a Regular act") };
+
+    let recitals = &reg.preamble.recitals;
+
+    // Recital (1): cites Council Regulation (EC) No 207/2009 via NOTE with OJ ref.
+    // Source: L_2017154EN.01000101.xml, first CONSID.
+    assert_eq!(recitals[0].citations.len(), 1, "recital (1) should have exactly 1 citation");
+    assert_eq!(
+        recitals[0].citations[0],
+        Citation {
+            act_type: CitedActType::Regulation,
+            regime: Some("EC".into()),
+            number: "207/2009".into(),
+            oj_ref: Some(OjRef { collection: "L".into(), number: "078".into(), date: "20090324".into(), page: 1 }),
+        },
+        "recital (1): unexpected citation"
+    );
+
+    // Recital (2): three NOTE-backed citations plus one inline mention of 207/2009.
+    // Source: L_2017154EN.01000101.xml, second CONSID (3 NOTEs for 40/94, 89/104, 2008/95;
+    // "207/2009" also appears inline in the text body).
+    let r2 = &recitals[1].citations;
+    assert!(
+        r2.contains(&Citation { act_type: CitedActType::Regulation, regime: Some("EC".into()), number: "40/94".into(),
+            oj_ref: Some(OjRef { collection: "L".into(), number: "011".into(), date: "19940114".into(), page: 1 }) }),
+        "recital (2): missing (EC) No 40/94 with OJ ref"
+    );
+    assert!(
+        r2.contains(&Citation { act_type: CitedActType::Directive, regime: Some("EEC".into()), number: "89/104".into(),
+            oj_ref: Some(OjRef { collection: "L".into(), number: "040".into(), date: "19890211".into(), page: 1 }) }),
+        "recital (2): missing 89/104/EEC with OJ ref"
+    );
+    assert!(
+        r2.contains(&Citation { act_type: CitedActType::Directive, regime: Some("EC".into()), number: "2008/95".into(),
+            oj_ref: Some(OjRef { collection: "L".into(), number: "299".into(), date: "20081108".into(), page: 25 }) }),
+        "recital (2): missing 2008/95/EC with OJ ref"
+    );
+    // Inline mention of 207/2009 in the recital body (no NOTE for it in recital (2)).
+    assert!(
+        r2.contains(&Citation { act_type: CitedActType::Regulation, regime: Some("EC".into()),
+            number: "207/2009".into(), oj_ref: None }),
+        "recital (2): missing inline 207/2009 (no OJ ref)"
+    );
+
+    // Recital (16): "(EU) No 608/2013" appears both inline and in a NOTE with OJ ref.
+    // After deduplication, exactly one entry with the OJ ref must remain.
+    // Source: L_2017154EN.01000101.xml, CONSID (16).
+    let r16 = &recitals[15].citations;
+    let eu_608: Vec<_> = r16.iter().filter(|c| c.number == "608/2013").collect();
+    assert_eq!(eu_608.len(), 1, "recital (16): 608/2013 must appear exactly once");
+    assert!(eu_608[0].oj_ref.is_some(), "recital (16): NOTE entry (with OJ ref) must win over inline");
+    assert_eq!(eu_608[0].regime, Some("EU".into()));
+
+    // Recital (18): "(EU) No 608/2013" inline only — no NOTE, so no OJ ref.
+    // Source: L_2017154EN.01000101.xml, CONSID (18).
+    let r18 = &recitals[17].citations;
+    let eu_608_inline: Vec<_> = r18.iter().filter(|c| c.number == "608/2013").collect();
+    assert_eq!(eu_608_inline.len(), 1, "recital (18): should have exactly one 608/2013 citation");
+    assert!(eu_608_inline[0].oj_ref.is_none(), "recital (18): inline-only citation must have no OJ ref");
 }

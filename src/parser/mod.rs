@@ -17,9 +17,12 @@
 mod act;
 /// Parser for annex XML files (`<ANNEX>` root).
 mod annex;
+/// Citation extraction from Formex XML nodes.
+pub(crate) mod citation;
 
 pub use act::{parse_regular_act, parse_consolidated_act};
 pub use annex::{parse_annex, parse_cons_annex};
+pub(crate) use citation::extract_citations;
 
 use roxmltree::Node;
 

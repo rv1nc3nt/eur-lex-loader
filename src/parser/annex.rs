@@ -3,7 +3,7 @@ use roxmltree::{Document, Node};
 use crate::error::Error;
 use crate::model::*;
 use crate::text::extract_text;
-use super::{child, parse_block_children, parse_list_as_subparagraphs, parse_single_tbl, parse_table};
+use super::{child, extract_citations, parse_block_children, parse_list_as_subparagraphs, parse_single_tbl, parse_table};
 
 /// Parses a Formex annex XML string (`<ANNEX>` root) into an [`Annex`].
 ///
@@ -91,7 +91,8 @@ fn parse_annex_sections(node: Node) -> Vec<AnnexSection> {
                 .and_then(|t| t.children().find(|n| n.is_element() && n.tag_name().name() == "TI"))
                 .map(extract_text)
                 .unwrap_or_default();
-            AnnexSection { title, alineas: parse_block_children(gr) }
+            let citations = extract_citations(gr);
+            AnnexSection { title, alineas: parse_block_children(gr), citations }
         })
         .collect()
 }
@@ -113,7 +114,7 @@ fn parse_annex_paragraphs(node: Node) -> Vec<Paragraph> {
             alineas.push(Subparagraph::Text { text: t, number: None });
         }
         if !alineas.is_empty() {
-            result.push(Paragraph { number: None, alineas: std::mem::take(alineas) });
+            result.push(Paragraph { number: None, alineas: std::mem::take(alineas), citations: vec![] });
         }
     };
 
@@ -227,7 +228,8 @@ fn np_to_paragraph(node: Node) -> Paragraph {
         vec![Subparagraph::List(ListBlock { number: None, intro: txt, items: nested })]
     };
 
-    Paragraph { number, alineas }
+    let citations = extract_citations(node);
+    Paragraph { number, alineas, citations }
 }
 
 #[cfg(test)]

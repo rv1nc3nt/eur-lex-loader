@@ -2,6 +2,41 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize}; // Deserialize needed for Subparagraph/ListBlock in tests
 
+/// The type of a cited EU legislative act.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CitedActType {
+    Regulation,
+    Directive,
+    Decision,
+}
+
+/// Official Journal publication coordinates, extracted from a `<REF.DOC.OJ>` element.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OjRef {
+    /// OJ series: `"L"` (legislation) or `"C"` (communications).
+    pub collection: String,
+    /// Issue number, e.g. `"277"`.
+    pub number: String,
+    /// Publication date in `YYYYMMDD` form, e.g. `"20221027"`.
+    pub date: String,
+    /// First page, e.g. `1`.
+    pub page: u32,
+}
+
+/// A structured reference to another EU legislative act found in a recital, paragraph, or annex section.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Citation {
+    pub act_type: CitedActType,
+    /// Legal regime: `"EU"`, `"EC"`, `"EEC"`, `"EURATOM"`, or `None` for unrecognised forms.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub regime: Option<String>,
+    /// Act number, e.g. `"2022/2065"` or `"207/2009"`.
+    pub number: String,
+    /// Official Journal reference when the citation was backed by a `<REF.DOC.OJ>` element.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oj_ref: Option<OjRef>,
+}
+
 /// Bibliographic metadata extracted from the `.doc.xml` registry file.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Metadata {
@@ -195,12 +230,15 @@ pub struct Preamble {
 ///
 /// In Formex the content is wrapped in a numbered paragraph (`<NP>`):
 /// `<NO.P>` holds the label and `<TXT>` holds the body.
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct Recital {
     /// The recital label, e.g. `"(1)"`.
     pub number: String,
     /// The plain-text body of the recital.
     pub text: String,
+    /// Structured citations to other EU acts found in this recital.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub citations: Vec<Citation>,
 }
 
 /// The operative body of the act (`<ENACTING.TERMS>`).
@@ -264,7 +302,7 @@ pub struct Article {
 /// Each paragraph consists of an optional number label followed by one or
 /// more alineas (text blocks). When an article has no `<PARAG>` wrappers its
 /// `<ALINEA>` children are grouped into a single paragraph with `number: None`.
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Paragraph {
     /// Paragraph number, e.g. `"1."` (from `<NO.PARAG>`). `None` for articles
     /// that use bare `<ALINEA>` elements without a `<PARAG>` wrapper.
@@ -274,6 +312,9 @@ pub struct Paragraph {
     /// optional intro `<P>`) becomes a [`Subparagraph::List`]; a `<GR.TBL>`
     /// or bare `<TBL>` element becomes a [`Subparagraph::Table`].
     pub alineas: Vec<Subparagraph>,
+    /// Structured citations to other EU acts found in this paragraph.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub citations: Vec<Citation>,
 }
 
 /// A content element within a [`Paragraph`].
@@ -355,12 +396,15 @@ pub struct ListBlock {
 /// Used when an annex organises its content under named headings.  For annexes
 /// that consist of flat numbered paragraphs or plain text, [`AnnexContent::Paragraphs`]
 /// is used instead.
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct AnnexSection {
     /// Section heading (from `<TITLE><TI>`).
     pub title: String,
     /// Content items nested inside this section.
     pub alineas: Vec<Subparagraph>,
+    /// Structured citations to other EU acts found in this section.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub citations: Vec<Citation>,
 }
 
 /// Discriminates the top-level structure of an annex.

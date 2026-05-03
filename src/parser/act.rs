@@ -3,7 +3,7 @@ use roxmltree::{Document, Node};
 use crate::error::Error;
 use crate::model::*;
 use crate::text::extract_text;
-use super::{child, parse_block_children};
+use super::{child, extract_citations, parse_block_children};
 
 /// Parses a regular Formex act XML string (`<ACT>` root) into its three parts.
 ///
@@ -138,7 +138,8 @@ fn parse_recital(node: Node) -> Recital {
         (String::new(), extract_text(node))
     };
 
-    Recital { number, text }
+    let citations = extract_citations(node);
+    Recital { number, text, citations }
 }
 
 /// Collects all top-level `<DIVISION>` elements as chapters.
@@ -242,7 +243,7 @@ fn parse_article(node: Node) -> Result<Article, Error> {
             .filter(|n| n.is_element() && n.tag_name().name() == "ALINEA")
             .flat_map(expand_alinea)
             .collect();
-        vec![Paragraph { number: None, alineas }]
+        vec![Paragraph { number: None, alineas, citations: extract_citations(node) }]
     };
 
     Ok(Article { number, title, paragraphs })
@@ -261,7 +262,8 @@ fn parse_paragraph(node: Node) -> Result<Paragraph, Error> {
         .flat_map(expand_alinea)
         .collect();
 
-    Ok(Paragraph { number, alineas })
+    let citations = extract_citations(node);
+    Ok(Paragraph { number, alineas, citations })
 }
 
 /// Expands a single `<ALINEA>` element into one or more [`Subparagraph`]s.
