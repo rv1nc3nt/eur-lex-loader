@@ -62,8 +62,6 @@ pub mod loader;
 pub mod model;
 /// XML parsers for the main act and annex files.
 pub mod parser;
-/// Plain-text extraction from Formex mixed-content XML nodes.
-pub mod text;
 
 pub use loader::load_act;
 pub use model::{Act, RegularAct, ConsolidatedAct, ConsolidatedPreamble, Metadata, OfficialJournal};

@@ -57,19 +57,13 @@ pub fn load_act(data_dir: &Path) -> Result<Act, Error> {
 /// "Definitions" and extracts a term → definition-text map from their list items.
 fn extract_definitions(enacting_terms: &crate::model::EnactingTerms) -> HashMap<String, String> {
     let mut map = HashMap::new();
-    let articles = enacting_terms.chapters.iter().flat_map(|ch| match &ch.contents {
+    let mut articles = enacting_terms.chapters.iter().flat_map(|ch| match &ch.contents {
         ChapterContents::Articles(arts) => arts.iter().collect::<Vec<_>>(),
         ChapterContents::Sections(secs) => {
             secs.iter().flat_map(|s| s.articles.iter()).collect()
         }
     });
-    for article in articles {
-        let is_definitions = article.title.as_deref()
-            .map(|t| t.contains("Definitions"))
-            .unwrap_or(false);
-        if !is_definitions {
-            continue;
-        }
+    if let Some(article) = articles.find(|a| a.title.as_deref() == Some("Definitions")) {
         for para in &article.paragraphs {
             for alinea in &para.alineas {
                 collect_definition_items(alinea, &mut map);

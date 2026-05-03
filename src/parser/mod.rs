@@ -19,6 +19,8 @@ mod act;
 mod annex;
 /// Citation extraction from Formex XML nodes.
 pub(crate) mod citation;
+/// Plain-text extraction from Formex mixed-content XML nodes.
+mod text;
 
 pub use act::{parse_regular_act, parse_consolidated_act};
 pub use annex::{parse_annex, parse_cons_annex};
@@ -28,7 +30,7 @@ use roxmltree::Node;
 
 use crate::error::Error;
 use crate::model::{Cell, ListBlock, Row, Subparagraph, Table};
-use crate::text::extract_text;
+use text::extract_text;
 
 /// Returns the first direct child element of `node` with the given tag name.
 ///

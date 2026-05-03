@@ -16,17 +16,7 @@ use roxmltree::Node;
 /// - Non-breaking spaces (`\u{00A0}`) are converted to regular spaces.
 /// - Runs of whitespace (including newlines from pretty-printed XML) are
 ///   collapsed to a single space and leading/trailing whitespace is trimmed.
-///
-/// # Example
-///
-/// ```
-/// use eur_lex_loader::text::extract_text;
-///
-/// let xml = r#"<P>Hello <NOTE NOTE.ID="n1"><P>fn</P></NOTE> world.</P>"#;
-/// let doc = roxmltree::Document::parse(xml).unwrap();
-/// assert_eq!(extract_text(doc.root_element()), "Hello world.");
-/// ```
-pub fn extract_text(node: Node) -> String {
+pub(crate) fn extract_text(node: Node) -> String {
     let raw = collect_text(node);
     normalize_whitespace(&raw.replace('\u{00A0}', " "))
 }
@@ -87,15 +77,12 @@ mod tests {
     }
 
     #[test]
-    /// A plain text node with no child elements is returned verbatim.
     fn plain_text() {
         assert_eq!(parse_and_extract("<P>Hello world</P>"), "Hello world");
     }
 
     #[test]
-    /// Inline formatting elements such as `<HT>` are traversed transparently, preserving their text.
     fn nested_elements_transparent() {
-        // HT (highlighting) elements are transparent wrappers.
         assert_eq!(
             parse_and_extract("<P>foo <HT TYPE=\"UC\">bar</HT> baz</P>"),
             "foo bar baz"
@@ -103,42 +90,34 @@ mod tests {
     }
 
     #[test]
-    /// A `<NOTE>` element body is dropped entirely; punctuation that follows it in a sibling text node is kept.
     fn note_suppressed() {
-        // The NOTE body is dropped; the comma after the marker is kept.
         let xml = r#"<P>See Article 5<NOTE NOTE.ID="E0001"><P>body</P></NOTE>, paragraph 1.</P>"#;
         assert_eq!(parse_and_extract(xml), "See Article 5, paragraph 1.");
     }
 
     #[test]
-    /// `<QUOT.START>` and `<QUOT.END>` elements are replaced with Unicode typographic quote characters.
     fn quot_markers_converted() {
         let xml = r#"<P><QUOT.START CODE="2018"/>hello<QUOT.END CODE="2019"/></P>"#;
         assert_eq!(parse_and_extract(xml), "\u{201C}hello\u{201D}");
     }
 
     #[test]
-    /// Non-breaking spaces (`\u{a0}`) are normalised to regular spaces.
     fn nbsp_converted_to_space() {
-        // Non-breaking spaces appear in identifiers like "Article\u{a0}1".
         let xml = "<P>Article\u{a0}1</P>";
         assert_eq!(parse_and_extract(xml), "Article 1");
     }
 
     #[test]
-    /// Runs of whitespace are collapsed to a single space and leading/trailing space is trimmed.
     fn whitespace_collapsed() {
         assert_eq!(normalize_whitespace("  foo   bar  "), "foo bar");
     }
 
     #[test]
-    /// An empty input string is returned as an empty string.
     fn empty_string() {
         assert_eq!(normalize_whitespace(""), "");
     }
 
     #[test]
-    /// A string consisting entirely of whitespace is normalised to an empty string.
     fn only_whitespace() {
         assert_eq!(normalize_whitespace("   "), "");
     }

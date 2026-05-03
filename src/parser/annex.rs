@@ -9,8 +9,8 @@ use roxmltree::{Document, Node};
 
 use crate::error::Error;
 use crate::model::*;
-use crate::text::extract_text;
 use super::{child, extract_citations, parse_block_children, parse_list_as_subparagraphs, parse_single_tbl, parse_table};
+use super::text::extract_text;
 
 /// Parses a Formex annex XML string (`<ANNEX>` root) into an [`Annex`].
 ///

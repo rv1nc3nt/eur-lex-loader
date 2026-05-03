@@ -9,7 +9,7 @@ use roxmltree::{Document, Node};
 
 use crate::error::Error;
 use crate::model::*;
-use crate::text::extract_text;
+use super::text::extract_text;
 use super::{child, extract_citations, parse_block_children};
 
 /// Parses a regular Formex act XML string (`<ACT>` root) into its three parts.
@@ -44,10 +44,7 @@ pub fn parse_regular_act(xml: &str) -> Result<(String, Preamble, EnactingTerms),
 pub fn parse_consolidated_act(xml: &str) -> Result<(String, ConsolidatedPreamble, EnactingTerms), Error> {
     let doc = Document::parse(xml)?;
     let root = doc.root_element();
-    let content = root
-        .children()
-        .find(|n| n.is_element() && n.tag_name().name() == "CONS.DOC")
-        .ok_or(Error::MissingElement("CONS.DOC"))?;
+    let content = child(root, "CONS.DOC")?;
     let title = parse_title(child(content, "TITLE")?)?;
     let preamble = parse_consolidated_preamble(child(content, "PREAMBLE")?)?;
     let enacting_terms = parse_enacting_terms(child(content, "ENACTING.TERMS")?)?;
